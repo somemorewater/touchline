@@ -1,0 +1,5 @@
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.live { color: var(--live); background: var(--live-bg); }
+.done { color: var(--ok); background: var(--ok-bg); }
+.plain { color: var(--ink-2); background: var(--neutral-bg); }
+.warn { color: var(--warn); background: var(--warn-bg); }

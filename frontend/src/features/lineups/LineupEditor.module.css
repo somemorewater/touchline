@@ -1,0 +1,65 @@
+.editor { display: flex; flex-direction: column; gap: var(--space-3); }
+.head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.head h3 { font-size: var(--text-lg); }
+.status { display: flex; align-items: center; gap: var(--space-2); margin-top: 4px; flex-wrap: wrap; }
+.workspace { display: grid; grid-template-columns: minmax(240px, 0.85fr) minmax(0, 1.15fr); gap: var(--space-4); align-items: start; }
+.pitchWrap { display: flex; flex-direction: column; gap: var(--space-2); }
+.pitch {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 68 / 105;
+  max-height: 560px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background:
+    linear-gradient(180deg, rgba(6, 88, 52, 0.92), rgba(5, 63, 39, 0.96)),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0 9%, transparent 9% 18%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), var(--shadow-card);
+  overflow: hidden;
+}
+.halfway { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(255, 255, 255, 0.3); }
+.pitchEmpty { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-4); color: rgba(255, 255, 255, 0.75); font-size: var(--text-sm); text-align: center; }
+.marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  min-width: 40px;
+  padding: 4px 5px;
+  border-radius: 10px;
+  background: rgba(10, 40, 26, 0.55);
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 10px;
+  line-height: 1.1;
+  pointer-events: none;
+}
+.markerFilled {
+  background: linear-gradient(145deg, #ffffff, #d9e8ff);
+  border: 1px solid rgba(10, 40, 26, 0.4);
+  color: #0b2a45;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+.marker b { font: 700 12px var(--font-display); }
+.marker small { max-width: 82px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.marker i { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; background: #d6ff9e; color: #173300; font: 700 9px var(--font-display); font-style: normal; }
+.slotList { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-3); }
+.slotRow { display: grid; grid-template-columns: 80px minmax(0, 1fr) 62px auto; gap: 6px; align-items: center; }
+.slotTag { font-size: var(--text-xs); font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.03em; }
+.shirtInput { min-height: 34px; padding: 4px 6px; text-align: center; }
+.remove { border: 0; background: transparent; color: #b3261e; font-size: var(--text-xs); font-weight: 600; padding: 4px 2px; }
+.remove:hover { text-decoration: underline; }
+.squadList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.squadRow { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 5px 0; border-bottom: 1px solid var(--glass-edge); flex-wrap: wrap; }
+.squadRow:last-child { border-bottom: 0; }
+.subFields { display: inline-flex; align-items: center; gap: 6px; }
+.subFields .tl-select { min-height: 32px; width: auto; }
+.reasonRow { max-width: 720px; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+@media (max-width: 820px) {
+  .workspace { grid-template-columns: 1fr; }
+  .pitch { max-height: 460px; }
+  .slotRow { grid-template-columns: 64px minmax(0, 1fr) 54px; }
+  .remove { grid-column: 1 / -1; justify-self: end; }
+}

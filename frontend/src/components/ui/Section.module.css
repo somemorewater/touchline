@@ -1,0 +1,6 @@
+.section { margin-bottom: var(--space-6); }
+.head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-3); }
+.head h2 { font-size: var(--text-xl); }
+.head a { font-size: var(--text-sm); font-weight: 600; color: var(--brand-text); }
+.list { position: relative; isolation: isolate; border: 1px solid var(--glass-edge); border-radius: var(--radius-lg); overflow: hidden; background: linear-gradient(145deg, var(--glass-strong), var(--glass)); box-shadow: var(--shadow-card); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%); backdrop-filter: blur(var(--glass-blur)) saturate(180%); }
+.list::before { content: ''; position: absolute; inset: 0 0 auto; height: 46%; z-index: 0; pointer-events: none; background: var(--glass-sheen); opacity: .58; }

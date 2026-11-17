@@ -1,0 +1,12 @@
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.list a { position: relative; isolation: isolate; display: grid; gap: 2px; padding: var(--space-4); background: linear-gradient(145deg, var(--glass-strong), var(--glass)); border: 1px solid var(--glass-edge); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%); backdrop-filter: blur(var(--glass-blur)) saturate(180%); }
+.list a::before { content: ''; position: absolute; inset: 0 0 auto; height: 55%; z-index: -1; border-radius: inherit; pointer-events: none; background: var(--glass-sheen); opacity: .58; }
+.list a:hover { border-color: var(--brand-text); text-decoration: none; }
+.list strong { font: 700 var(--text-lg) var(--font-display); }
+.list span { color: var(--ink-3); font-size: var(--text-sm); }
+.list p { color: var(--ink-2); }
+.article { max-width: 66ch; display: grid; gap: var(--space-3); line-height: 1.7; }
+.article h1 { font-size: var(--text-2xl); }
+.article > a { color: var(--brand-text); font-weight: 600; font-size: var(--text-sm); }
+.byline { color: var(--ink-3); font-size: var(--text-sm); }
+.body { white-space: pre-wrap; }

@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Test and coverage output
+coverage/
+.vitest/
+test-results/
+playwright-report/
+
+# Logs, caches and temporary files
+logs/
+*.log
+.cache/
+tmp/
+temp/
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Local runtime data, databases and uploads
+var/
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.bak
+uploads/
+evidence/
+
+# Local development infrastructure and old prototype
+# (kept on disk, never published)
+docker-compose.yml
+docker-compose.yaml
+docker-compose.*.yml
+docker-compose.*.yaml
+compose.yml
+compose.yaml
+compose.*.yml
+compose.*.yaml
+pgadmin/
+frontend/legacy/
+
+# Editor and OS local configuration
+.idea/
+.vscode/
+*.code-workspace
