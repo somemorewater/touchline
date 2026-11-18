@@ -1,3 +1,10 @@
+# pnpm 12 blocks dependency lifecycle scripts by default. Render must install
+# non-interactively, so only the packages that actually need their
+# install/postinstall scripts are approved here. Any unlisted dependency with
+# build scripts remains blocked and fails with ERR_PNPM_IGNORED_BUILDS.
+strictDepBuilds: true
 allowBuilds:
-  argon2: false
-  esbuild: false
+  # Native Argon2id binding used for password hashing at runtime.
+  argon2: true
+  # Binary installer used by tsx, drizzle-kit and vitest tooling.
+  esbuild: true
