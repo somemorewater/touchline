@@ -16,6 +16,20 @@ Run `pnpm start` under systemd or another process supervisor. The compiled entry
 
 `pnpm db:migrate` is a deployment step, not an application-start side effect. It fails non-zero on an unreachable database, missing/invalid migration metadata, or an empty migration, so a failed migration blocks the release. Review generated SQL before deploying it.
 
+## Render
+
+The repository has no root `package.json`, so the backend service must use `backend` as its **Root Directory**. Build output is gitignored, so compilation has to run on every deployment.
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | `backend` |
+| Build Command | `pnpm install --frozen-lockfile --prod=false && pnpm build` |
+| Start Command | `pnpm start` |
+
+`pnpm build` compiles `src/` to `dist/`, and `pnpm start` runs `dist/server.js`. `--prod=false` is required because TypeScript is a dev dependency and would otherwise be unavailable to the build on a production install.
+
+The repository root contains a `render.yaml` Blueprint with the same settings. If the service was created manually in the Render dashboard, set the values above there instead. Run `pnpm db:migrate` as a separate release step after the build; it is not part of application startup.
+
 ## Health probes
 
 - Liveness: `GET /health/live` — restart the process only when this fails repeatedly.

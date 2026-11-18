@@ -1,0 +1,23 @@
+# Render Blueprint for the TOUCHLINE API.
+# The repository has no root package, so the service builds from backend/.
+services:
+  - type: web
+    name: touchline-api
+    runtime: node
+    rootDir: backend
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "true"
