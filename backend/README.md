@@ -31,9 +31,11 @@ The API listens on `:4000` by default, OpenAPI UI is at `/docs`, and routes are 
 - `pnpm typecheck`: type-check application and tooling TypeScript
 - `pnpm build`: compile strict TypeScript to `dist/`
 - `pnpm start`: run the compiled server from `dist/`
+- `pnpm start:deploy`: apply compiled migrations, then start the server (used by Render)
 - `pnpm test`: run the Phase 1 error-contract suite and, when `TEST_DATABASE_URL` is set, the real-database security regression suite
 - `pnpm db:generate`: generate a new Drizzle migration after a schema change
-- `pnpm db:migrate`: validate and apply committed migrations
+- `pnpm db:migrate`: validate and apply committed migrations from source
+- `pnpm db:migrate:prod`: apply committed migrations from the compiled `dist/`
 - `pnpm db:check`: validate Drizzle migration metadata
 - `pnpm db:seed`: repeatable canonical role/permission seed
 

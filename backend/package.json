@@ -8,10 +8,12 @@
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "pnpm clean && tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "start:deploy": "pnpm db:migrate:prod && pnpm start",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tools.json",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/database/migrate.ts",
+    "db:migrate:prod": "node dist/database/migrate.js",
     "db:seed": "tsx src/database/seed/run.ts",
     "db:check": "drizzle-kit check"
   },

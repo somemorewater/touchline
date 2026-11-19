@@ -8,13 +8,12 @@ Use a supported Node.js LTS on a Linux VPS and PostgreSQL with private network a
 pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm build
-pnpm db:migrate
-pnpm start
+pnpm start:deploy
 ```
 
-Run `pnpm start` under systemd or another process supervisor. The compiled entry point is `dist/server.js`. Keep `NODE_ENV=production`, set `COOKIE_SECURE=true`, use a strong `JWT_ACCESS_SECRET` of at least 32 characters, production database credentials, and exact `CORS_ORIGINS`. Set `TRUST_PROXY=true` only when a trusted reverse proxy forwards client addresses.
+Run `pnpm start:deploy` under systemd or another process supervisor. It applies the compiled migrations from `dist/database/migrate.js` and only starts `dist/server.js` if they succeed. Keep `NODE_ENV=production`, set `COOKIE_SECURE=true`, use a strong `JWT_ACCESS_SECRET` of at least 32 characters, production database credentials, and exact `CORS_ORIGINS`. Set `TRUST_PROXY=true` only when a trusted reverse proxy forwards client addresses.
 
-`pnpm db:migrate` is a deployment step, not an application-start side effect. It fails non-zero on an unreachable database, missing/invalid migration metadata, or an empty migration, so a failed migration blocks the release. Review generated SQL before deploying it.
+The migration runner exits non-zero on an unreachable database, missing/invalid migration metadata, an empty migration, or incomplete tracking, so a failed migration prevents the server from starting. It resolves the committed SQL and journal from `backend/drizzle/` relative to the compiled module, not the process working directory. A PostgreSQL advisory lock serializes concurrent migration attempts across instances. Review generated SQL before deploying it.
 
 ## Render
 
@@ -24,11 +23,13 @@ The repository has no root `package.json`, so the backend service must use `back
 | --- | --- |
 | Root Directory | `backend` |
 | Build Command | `pnpm install --frozen-lockfile --prod=false && pnpm build` |
-| Start Command | `pnpm start` |
+| Start Command | `pnpm start:deploy` |
 
-`pnpm build` compiles `src/` to `dist/`, and `pnpm start` runs `dist/server.js`. `--prod=false` is required because TypeScript is a dev dependency and would otherwise be unavailable to the build on a production install.
+`pnpm build` compiles `src/` to `dist/`, including `dist/database/migrate.js`; `pnpm start:deploy` runs that migration runner before `dist/server.js`. `--prod=false` is required because TypeScript is a dev dependency and would otherwise be unavailable to the build on a production install. The committed `drizzle/` directory remains part of the deployed repository and is required at runtime.
 
-The repository root contains a `render.yaml` Blueprint with the same settings. If the service was created manually in the Render dashboard, set the values above there instead. Run `pnpm db:migrate` as a separate release step after the build; it is not part of application startup.
+The repository root contains a `render.yaml` Blueprint with the same settings. If the service was created manually in the Render dashboard, set the values above there instead. A failed migration exits non-zero, so Render aborts the start and keeps the previous successful deploy running.
+
+Render pre-deploy commands are available only for paid services. On a paid service you may alternatively set the **Pre-Deploy Command** to `pnpm db:migrate:prod` and the **Start Command** to `pnpm start`; migrations then run once per deploy. The checked-in Blueprint uses `pnpm start:deploy` so the same workflow also works on the free plan.
 
 ## Health probes
 
