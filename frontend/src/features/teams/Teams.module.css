@@ -1,6 +1,6 @@
 .group { margin-bottom: var(--space-6); }
 .group h2 { font-size: var(--text-xl); margin-bottom: var(--space-3); }
-.grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-3); }
+.grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: var(--space-3); }
 .card { position: relative; isolation: isolate; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4); background: linear-gradient(145deg, var(--glass-strong), var(--glass)); border: 1px solid var(--glass-edge); border-radius: var(--radius-lg); font-weight: 600; min-height: 64px; box-shadow: var(--shadow-card); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%); backdrop-filter: blur(var(--glass-blur)) saturate(180%); }
 .card::before { content: ''; position: absolute; inset: 0 0 auto; height: 60%; z-index: -1; border-radius: inherit; pointer-events: none; background: var(--glass-sheen); opacity: .58; }
 .card:hover { border-color: var(--brand-text); text-decoration: none; }

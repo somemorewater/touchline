@@ -1,6 +1,5 @@
 .crumbs { font-size: var(--text-sm); margin-bottom: var(--space-3); color: var(--brand-text); font-weight: 600; }
-.head { position: relative; isolation: isolate; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--space-4); background: linear-gradient(135deg, color-mix(in srgb, var(--pitch) 92%, var(--surface)), color-mix(in srgb, var(--pitch) 76%, var(--ink-2))); color: var(--pitch-ink); border: 1px solid var(--glass-edge); border-radius: 28px; padding: var(--space-6) var(--space-5) var(--space-4); margin-bottom: var(--space-5); box-shadow: var(--shadow-pop), inset 0 1.5px 0 rgba(255,255,255,.12); -webkit-backdrop-filter: blur(24px) saturate(140%); backdrop-filter: blur(24px) saturate(140%); }
-.head::before { content: ''; position: absolute; inset: 0 0 auto; height: 62%; z-index: -1; border-radius: inherit; pointer-events: none; background: var(--glass-sheen); opacity: .72; }
+.head { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--space-4); background: var(--pitch); color: var(--pitch-ink); border-radius: var(--radius-lg); padding: var(--space-5); margin-bottom: var(--space-5); }
 .team { display: grid; justify-items: center; gap: var(--space-2); text-align: center; font: 700 var(--text-lg) var(--font-display); }
 .mid { display: grid; justify-items: center; gap: var(--space-2); }
 .score { font-size: clamp(2rem, 6vw, 3.25rem); font-weight: 700; line-height: 1; }
@@ -16,4 +15,4 @@
 .stats th, .stats td { padding: 10px var(--space-4); text-align: center; border-bottom: 1px solid var(--line); }
 .stats tbody th { color: var(--ink-2); font-weight: 500; }
 .report { max-width: 66ch; line-height: 1.7; }
-@media (max-width: 760px) { .head { grid-template-columns: 1fr auto 1fr; padding: var(--space-5) var(--space-3) var(--space-3); gap: var(--space-2); } .team { font-size: var(--text-sm); } }
+@media (max-width: 480px) { .head { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding: var(--space-4) var(--space-2); gap: 6px; } .team { font-size: var(--text-sm); overflow-wrap: anywhere; } .meta { gap: var(--space-2) var(--space-3); } }
