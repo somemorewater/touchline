@@ -1,3 +1,4 @@
 .footer { flex: 0 0 auto; border-top: 1px solid var(--glass-edge); background: linear-gradient(110deg, var(--glass-strong), var(--glass)); box-shadow: 0 -8px 24px rgba(18, 60, 116, 0.035), inset 0 1px 0 var(--glass-highlight); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(165%); backdrop-filter: blur(var(--glass-blur)) saturate(165%); }
 .inner { max-width: var(--width-page); margin: 0 auto; padding: var(--space-5) var(--space-4); display: flex; gap: var(--space-4); flex-wrap: wrap; color: var(--ink-3); font-size: var(--text-sm); }
 .inner strong { font-family: var(--font-display); letter-spacing: 0.08em; color: var(--ink); }
+@media (max-width: 900px) { .inner { padding-bottom: calc(80px + env(safe-area-inset-bottom)); } }

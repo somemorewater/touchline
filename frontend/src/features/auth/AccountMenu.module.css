@@ -16,6 +16,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
 }
+@media (max-width: 430px) { .signIn { min-height: 44px; padding-inline: 6px; font-size: var(--text-xs); } .placeholder { width: 44px; height: 44px; } }
 .signIn:hover { text-decoration: none; background: rgba(255, 255, 255, 0.12); }
 .wrap { position: relative; }
 .trigger {
