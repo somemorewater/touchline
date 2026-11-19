@@ -71,6 +71,16 @@ export const authApi = {
   logoutAll() {
     return request<{ loggedOutAll: boolean }>('/auth/logout-all', { method: 'POST' });
   },
+  changePassword(input: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) {
+    return request<{ changed: boolean }>('/auth/change-password', {
+      method: 'POST',
+      body: input,
+    });
+  },
 };
 
 /* ---------------------------- competitions ------------------------------ */

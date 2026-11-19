@@ -25,6 +25,11 @@ interface AuthContextValue {
   register(input: { email: string; password: string; displayName: string }): Promise<CurrentUser>;
   logout(): Promise<void>;
   logoutAll(): Promise<void>;
+  changePassword(input: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }): Promise<void>;
   refreshUser(): Promise<CurrentUser | null>;
   can(permission: string): boolean;
   canIn(permission: string, competitionId: string | undefined): boolean;
@@ -146,6 +151,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [clearSession]);
 
+  const changePassword = useCallback(
+    async (input: { currentPassword: string; newPassword: string; confirmPassword: string }) => {
+      await authApi.changePassword(input);
+      clearSession();
+    },
+    [clearSession],
+  );
+
   const value = useMemo<AuthContextValue>(() => {
     const permissions = new Set(user?.permissions ?? []);
     const scoped = new Map((user?.scopes ?? []).map((scope) => [scope.competitionId, new Set(scope.permissions)]));
@@ -174,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       logoutAll,
+      changePassword,
       refreshUser,
       can,
       canIn,
@@ -184,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isCaptain: roles.has('team_captain'),
       isOfficial: roles.has('match_official'),
     };
-  }, [status, user, bootstrapError, login, register, logout, logoutAll, refreshUser]);
+  }, [status, user, bootstrapError, login, register, logout, logoutAll, changePassword, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

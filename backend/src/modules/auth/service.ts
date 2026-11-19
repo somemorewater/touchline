@@ -265,6 +265,62 @@ export class AuthService {
   }
 
   /**
+   * Change the authenticated user's password.
+   *
+   * The caller always passes the user ID from the verified access token, never
+   * a client-supplied ID. The password update is conditional on the old hash
+   * so two concurrent changes cannot silently overwrite each other. Every
+   * session and refresh token for this user is revoked in the same transaction.
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const [user] = await db
+      .select({ id: users.id, passwordHash: users.passwordHash })
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.isActive, true)));
+    if (!user) throw unauthenticated();
+
+    if (!(await verifyPassword(user.passwordHash, currentPassword))) {
+      throw new AppError(400, 'INVALID_CURRENT_PASSWORD', 'Current password is incorrect.');
+    }
+    if (newPassword === currentPassword) {
+      throw new AppError(400, 'PASSWORD_UNCHANGED', 'New password must be different from the current password.');
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    const now = new Date();
+
+    const changed = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(users)
+        .set({ passwordHash, updatedAt: now })
+        .where(
+          and(
+            eq(users.id, userId),
+            eq(users.isActive, true),
+            eq(users.passwordHash, user.passwordHash),
+          ),
+        )
+        .returning({ id: users.id });
+      if (!updated) return false;
+
+      await tx
+        .update(sessions)
+        .set({ revokedAt: now, revokedReason: 'password_change' })
+        .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+      await tx
+        .update(refreshTokens)
+        .set({ revokedAt: now })
+        .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
+      return true;
+    });
+
+    if (!changed) {
+      throw conflict('The password was changed by another request. Try again.');
+    }
+    closeUser(userId);
+  }
+
+  /**
    * Account activation primitive for future administrative routes.
    * Deactivation revokes every session immediately; reactivation never
    * restores a revoked session.

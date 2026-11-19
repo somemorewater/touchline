@@ -8,6 +8,7 @@ import { useCompetitions } from '@/features/competitions/hooks';
 import { errorMessage } from '@/lib/api/client';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { permissionLabel, roleLabel } from '@/features/auth/labels';
+import { PasswordChangeForm } from './PasswordChangeForm';
 import styles from './Account.module.css';
 
 export function AccountView() {
@@ -105,6 +106,11 @@ export function AccountView() {
             </div>
           </>
         ) : null}
+      </section>
+
+      <section className={`tl-card ${styles.block}`}>
+        <h2>Password</h2>
+        <PasswordChangeForm />
       </section>
 
       <section className={`tl-card ${styles.block}`}>

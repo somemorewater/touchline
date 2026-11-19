@@ -23,6 +23,21 @@ const loginSchema = z
     password: z.string().min(1).max(128),
   })
   .strict();
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(128),
+    newPassword: z.string().min(8).max(128),
+    confirmPassword: z.string().min(1).max(128),
+  })
+  .strict()
+  .refine((value) => value.newPassword === value.confirmPassword, {
+    message: 'New password and confirmation do not match.',
+    path: ['confirmPassword'],
+  })
+  .refine((value) => value.newPassword !== value.currentPassword, {
+    message: 'New password must be different from the current password.',
+    path: ['newPassword'],
+  });
 
 function noStore(reply: FastifyReply): void {
   reply.header('cache-control', 'no-store');
@@ -80,6 +95,26 @@ export async function authRoutes(app: FastifyInstance) {
           user: data.user,
         },
       });
+    },
+  );
+
+  app.post(
+    '/auth/change-password',
+    {
+      config: { rateLimit: { max: 8, timeWindow: '1 minute' } },
+      preHandler: app.authenticate,
+    },
+    async (req, reply) => {
+      const input = changePasswordSchema.parse(req.body);
+      await service.changePassword(
+        req.auth!.userId,
+        input.currentPassword,
+        input.newPassword,
+      );
+      reply.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+      reply.clearCookie(ACCESS_COOKIE_NAME, accessCookieOptions);
+      noStore(reply);
+      return reply.send({ success: true, data: { changed: true } });
     },
   );
 

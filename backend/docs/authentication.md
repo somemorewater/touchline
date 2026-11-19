@@ -41,6 +41,14 @@ This database check is what makes revocation immediate instead of waiting for th
 
 Refresh tokens remain random, are stored only as hashes, and are never written to logs. Session expiry is fixed at login rather than sliding indefinitely.
 
+## Password changes
+
+`POST /api/v1/auth/change-password` requires a valid access token. The body is strict and accepts only `currentPassword`, `newPassword` and `confirmPassword`; a client-supplied user ID is rejected with `400 VALIDATION_ERROR`. The user is always taken from the verified token (`sub`), so an account can only change its own password.
+
+The current password is checked with the existing Argon2id verifier. The new password must be 8–128 characters, match the confirmation, and differ from the current password. An incorrect current password returns `400 INVALID_CURRENT_PASSWORD`; the other cases return `400 VALIDATION_ERROR`. None of the responses include password hashes or token material.
+
+On success the service updates the hash with a conditional write against the previously verified hash, so concurrent changes cannot silently overwrite each other. In the same transaction it revokes every session (`revoked_reason = 'password_change'`) and refresh token belonging to that user only; other accounts are unaffected. Live WebSocket connections for the user are closed after the commit, both auth cookies are cleared, and the response is `{ "changed": true }` with `Cache-Control: no-store`. The user must sign in again with the new password.
+
 ## Refresh reuse and concurrency
 
 Refresh rotation runs in a database transaction using `SELECT ... FOR UPDATE` on the token and session rows.

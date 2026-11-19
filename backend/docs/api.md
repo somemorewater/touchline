@@ -52,6 +52,7 @@ OpenAPI UI is `/docs`. Path parameters shown as `:id` must be UUIDs; otherwise t
 | POST | `/api/v1/auth/refresh` | cookie | Rotates refresh token; 30/min per IP |
 | POST | `/api/v1/auth/logout` | optional auth / cookie | Revokes current session; idempotent |
 | POST | `/api/v1/auth/logout-all` | authenticated | Revokes every session for the user |
+| POST | `/api/v1/auth/change-password` | authenticated | Verifies the current password, updates the hash and revokes the user's sessions; 8/min per IP |
 | GET | `/api/v1/auth/me` | authenticated | Safe account, roles, permissions and scopes |
 | GET | `/api/v1/competitions` | public, optionally private | Public competitions always; private only in scope |
 | POST | `/api/v1/competitions` | super admin | `competitions.create` |

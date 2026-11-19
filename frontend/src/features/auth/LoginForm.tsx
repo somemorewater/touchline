@@ -22,6 +22,7 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const returnTo = safeReturnTo(params.get('returnTo'));
+  const passwordChanged = params.get('passwordChanged') === '1';
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -46,6 +47,11 @@ export function LoginForm() {
         Sign in to manage your team, report matches or administer a competition.
         Public pages stay available without an account.
       </p>
+      {passwordChanged ? (
+        <p className="tl-alert tl-alert-success" role="status">
+          Your password was changed. Sign in again with your new password.
+        </p>
+      ) : null}
       {error ? <p className="tl-alert tl-alert-error" role="alert">{error}</p> : null}
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         <label className="tl-field">
