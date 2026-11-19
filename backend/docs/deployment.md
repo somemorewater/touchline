@@ -11,9 +11,17 @@ pnpm build
 pnpm start:deploy
 ```
 
-Run `pnpm start:deploy` under systemd or another process supervisor. It applies the compiled migrations from `dist/database/migrate.js` and only starts `dist/server.js` if they succeed. Keep `NODE_ENV=production`, set `COOKIE_SECURE=true`, use a strong `JWT_ACCESS_SECRET` of at least 32 characters, production database credentials, and exact `CORS_ORIGINS`. Set `TRUST_PROXY=true` only when a trusted reverse proxy forwards client addresses.
+Run `pnpm start:deploy` under systemd or another process supervisor. In order, it:
 
-The migration runner exits non-zero on an unreachable database, missing/invalid migration metadata, an empty migration, or incomplete tracking, so a failed migration prevents the server from starting. It resolves the committed SQL and journal from `backend/drizzle/` relative to the compiled module, not the process working directory. A PostgreSQL advisory lock serializes concurrent migration attempts across instances. Review generated SQL before deploying it.
+1. applies the compiled migrations from `dist/database/migrate.js`;
+2. inserts missing canonical security roles, permissions and grants from `dist/database/seed/production.js`;
+3. starts `dist/server.js` only if both steps succeed.
+
+Keep `NODE_ENV=production`, set `COOKIE_SECURE=true`, use a strong `JWT_ACCESS_SECRET` of at least 32 characters, production database credentials, and exact `CORS_ORIGINS`. Set `TRUST_PROXY=true` only when a trusted reverse proxy forwards client addresses.
+
+The migration runner exits non-zero on an unreachable database, missing/invalid migration metadata, an empty migration, or incomplete tracking, so a failed migration prevents the server from starting. It resolves the committed SQL and journal from `backend/drizzle/` relative to the compiled module, not the process working directory.
+
+The production security seed is insert-only: it never updates or deletes existing roles, permissions, grants or user assignments. Existing role descriptions and operator changes are preserved, and registration only needs the canonical `registered_user` role. PostgreSQL advisory locks serialize both the migration and seed steps across concurrent instances. Review generated SQL before deploying it.
 
 ## Render
 
@@ -25,11 +33,11 @@ The repository has no root `package.json`, so the backend service must use `back
 | Build Command | `pnpm install --frozen-lockfile --prod=false && pnpm build` |
 | Start Command | `pnpm start:deploy` |
 
-`pnpm build` compiles `src/` to `dist/`, including `dist/database/migrate.js`; `pnpm start:deploy` runs that migration runner before `dist/server.js`. `--prod=false` is required because TypeScript is a dev dependency and would otherwise be unavailable to the build on a production install. The committed `drizzle/` directory remains part of the deployed repository and is required at runtime.
+`pnpm build` compiles `src/` to `dist/`, including `dist/database/migrate.js` and `dist/database/seed/production.js`; `pnpm start:deploy` runs both before `dist/server.js`. `--prod=false` is required because TypeScript is a dev dependency and would otherwise be unavailable to the build on a production install. The committed `drizzle/` directory remains part of the deployed repository and is required at runtime.
 
-The repository root contains a `render.yaml` Blueprint with the same settings. If the service was created manually in the Render dashboard, set the values above there instead. A failed migration exits non-zero, so Render aborts the start and keeps the previous successful deploy running.
+The repository root contains a `render.yaml` Blueprint with the same settings. If the service was created manually in the Render dashboard, set the values above there instead. A failed migration or seed exits non-zero, so Render aborts the start and keeps the previous successful deploy running.
 
-Render pre-deploy commands are available only for paid services. On a paid service you may alternatively set the **Pre-Deploy Command** to `pnpm db:migrate:prod` and the **Start Command** to `pnpm start`; migrations then run once per deploy. The checked-in Blueprint uses `pnpm start:deploy` so the same workflow also works on the free plan.
+Render pre-deploy commands are available only for paid services. On a paid service you may alternatively set the **Pre-Deploy Command** to `pnpm db:migrate:prod && pnpm db:seed:prod` and the **Start Command** to `pnpm start`; both then run once per deploy. The checked-in Blueprint uses `pnpm start:deploy` so the same workflow also works on the free plan.
 
 ## Health probes
 

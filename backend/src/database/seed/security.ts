@@ -1,4 +1,4 @@
-import { eq, notInArray } from 'drizzle-orm';
+import { eq, inArray, notInArray } from 'drizzle-orm';
 import { db } from '../client.js';
 import { permissions, rolePermissions, roles } from '../schema/index.js';
 import {
@@ -53,5 +53,79 @@ export async function seedSecurity(): Promise<void> {
     }
 
     await tx.delete(permissions).where(notInArray(permissions.key, ALL_PERMISSIONS));
+  });
+}
+
+export interface SecuritySeedCounts {
+  rolesInserted: number;
+  permissionsInserted: number;
+  grantsInserted: number;
+}
+
+/**
+ * Deployment-safe security seed. Unlike seedSecurity it never updates or
+ * deletes rows: it only inserts canonical permissions, roles and grants that
+ * are absent, so existing role assignments and operator edits are preserved.
+ */
+export async function seedMissingSecurity(
+  database: Pick<typeof db, 'transaction'> = db,
+): Promise<SecuritySeedCounts> {
+  return database.transaction(async (tx) => {
+    const roleNames = Object.keys(ROLE_GRANTS) as RoleName[];
+
+    const insertedPermissions = await tx
+      .insert(permissions)
+      .values(ALL_PERMISSIONS.map((key) => ({ key, description: PERMISSION_DESCRIPTIONS[key] })))
+      .onConflictDoNothing({ target: permissions.key })
+      .returning({ id: permissions.id });
+
+    const insertedRoles = await tx
+      .insert(roles)
+      .values(roleNames.map((name) => ({ name, description: ROLE_DESCRIPTIONS[name] })))
+      .onConflictDoNothing({ target: roles.name })
+      .returning({ id: roles.id });
+
+    const permissionRows = await tx
+      .select({ id: permissions.id, key: permissions.key })
+      .from(permissions)
+      .where(inArray(permissions.key, ALL_PERMISSIONS));
+    const permissionIds = new Map(permissionRows.map((row) => [row.key, row.id]));
+
+    const roleRows = await tx
+      .select({ id: roles.id, name: roles.name })
+      .from(roles)
+      .where(inArray(roles.name, roleNames));
+    const roleIds = new Map(roleRows.map((row) => [row.name, row.id]));
+
+    const missingRole = roleNames.find((name) => !roleIds.has(name));
+    if (missingRole) {
+      throw new Error(`Required security role "${missingRole}" is missing after seeding.`);
+    }
+
+    const grants = roleNames.flatMap((name) => {
+      const roleId = roleIds.get(name);
+      if (!roleId) return [];
+      return ROLE_GRANTS[name].map((key) => {
+        const permissionId = permissionIds.get(key);
+        if (!permissionId) {
+          throw new Error(`Required permission "${key}" is missing after seeding.`);
+        }
+        return { roleId, permissionId };
+      });
+    });
+
+    const insertedGrants = grants.length
+      ? await tx
+          .insert(rolePermissions)
+          .values(grants)
+          .onConflictDoNothing()
+          .returning({ roleId: rolePermissions.roleId })
+      : [];
+
+    return {
+      rolesInserted: insertedRoles.length,
+      permissionsInserted: insertedPermissions.length,
+      grantsInserted: insertedGrants.length,
+    };
   });
 }

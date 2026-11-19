@@ -6,8 +6,8 @@ services:
     runtime: node
     rootDir: backend
     buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm build
-    # Apply committed Drizzle migrations before the server starts serving.
-    # A PostgreSQL advisory lock serializes concurrent instances.
+    # Apply committed Drizzle migrations, insert any missing canonical security
+    # roles, then start serving. Advisory locks serialize concurrent instances.
     startCommand: pnpm start:deploy
     healthCheckPath: /health
     envVars:

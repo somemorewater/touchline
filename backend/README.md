@@ -31,13 +31,14 @@ The API listens on `:4000` by default, OpenAPI UI is at `/docs`, and routes are 
 - `pnpm typecheck`: type-check application and tooling TypeScript
 - `pnpm build`: compile strict TypeScript to `dist/`
 - `pnpm start`: run the compiled server from `dist/`
-- `pnpm start:deploy`: apply compiled migrations, then start the server (used by Render)
+- `pnpm start:deploy`: apply compiled migrations, seed missing security roles, then start the server (used by Render)
 - `pnpm test`: run the Phase 1 error-contract suite and, when `TEST_DATABASE_URL` is set, the real-database security regression suite
 - `pnpm db:generate`: generate a new Drizzle migration after a schema change
 - `pnpm db:migrate`: validate and apply committed migrations from source
 - `pnpm db:migrate:prod`: apply committed migrations from the compiled `dist/`
 - `pnpm db:check`: validate Drizzle migration metadata
-- `pnpm db:seed`: repeatable canonical role/permission seed
+- `pnpm db:seed`: repeatable canonical role/permission seed (converges grants)
+- `pnpm db:seed:prod`: insert-only missing role, permission and grant seed used by deployments
 
 Migrations are committed under `drizzle/`. Run `db:generate`, review the generated SQL, and commit both the SQL file and `drizzle/meta/`. `db:migrate` fails with a non-zero exit code when the journal or SQL is missing or invalid, when a migration is empty, or when the database cannot be reached.
 

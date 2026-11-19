@@ -61,6 +61,8 @@ Migration `0002` runs a read-only preflight for identity and registration invari
 
 `db:seed` is idempotent and canonical: it upserts the roles/permissions from `src/security/permissions.ts`, replaces each role's grants, and removes permissions no longer in the catalog. Competition and AFIT team data remain intentionally unseeded pending organizer reconciliation.
 
+`db:seed:prod` is the deployment variant used by `start:deploy`. It is insert-only: it creates missing permissions, roles and grants but never updates or deletes existing rows or user-role assignments. It is safe to run repeatedly and after existing production data.
+
 ## Build, type-check and run
 
 ```bash
