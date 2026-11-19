@@ -239,6 +239,21 @@ export interface MatchEventDto {
   updatedAt: string;
 }
 
+export interface MatchFixtureSummaryDto {
+  id: string;
+  seasonId: string;
+  groupId: string | null;
+  homeTeamRegistrationId: string;
+  awayTeamRegistrationId: string;
+  round: number | null;
+  scheduledAt: string | null;
+  venue: string | null;
+  status: FixtureStatus;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MatchDetailDto {
   match: {
     id: string;
@@ -254,7 +269,7 @@ export interface MatchDetailDto {
     addedMinutes: number | null;
     createdAt: string;
     updatedAt: string;
-    fixture: FixtureDto;
+    fixture: MatchFixtureSummaryDto;
     homeTeam: TeamDto | null;
     awayTeam: TeamDto | null;
     homeRegistration: TeamEntryDto | null;

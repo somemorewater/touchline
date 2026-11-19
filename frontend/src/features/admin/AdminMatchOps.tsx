@@ -616,7 +616,7 @@ function MatchAdminPanel({
     <div className="tl-stack">
       <header className={styles.matchHead}>
         <div>
-          <h4>{detail.match.fixture.homeTeam.name} v {detail.match.fixture.awayTeam.name}</h4>
+          <h4>{detail.match.homeTeam?.name ?? 'Home team'} v {detail.match.awayTeam?.name ?? 'Away team'}</h4>
           <p className={styles.muted}>
             {formatDateTime(detail.match.fixture.scheduledAt ?? undefined, DISPLAY_TIME_ZONE)} ·{' '}
             {matchStatusLabel(viewStatus(detail.match.status))}
@@ -854,13 +854,20 @@ function StandingsPanel({ competitionId, seasonId }: { competitionId: string; se
     queryKey: ['admin-groups', seasonId],
     queryFn: () => competitionsApi.groups(seasonId),
   });
+  const groups = groupsQ.data ?? [];
+  // A grouped season has no whole-season table. Default to the first group
+  // instead of issuing a request the backend must reject with 400.
+  const selectedGroupId = groupId || groups[0]?.id || '';
+  const groupReady = !groupsQ.isLoading && (groups.length === 0 || Boolean(selectedGroupId));
   const standingsQ = useQuery({
-    queryKey: ['admin-standings', seasonId, groupId],
-    queryFn: () => standingsApi.get({ seasonId, groupId: groupId || undefined }),
+    queryKey: ['admin-standings', seasonId, selectedGroupId],
+    queryFn: () => standingsApi.get({ seasonId, groupId: selectedGroupId || undefined }),
+    enabled: groupReady,
   });
   const snapshotsQ = useQuery({
-    queryKey: ['admin-standings-snapshots', seasonId, groupId],
-    queryFn: () => standingsApi.snapshots({ seasonId, groupId: groupId || undefined, limit: 10 }),
+    queryKey: ['admin-standings-snapshots', seasonId, selectedGroupId],
+    queryFn: () => standingsApi.snapshots({ seasonId, groupId: selectedGroupId || undefined, limit: 10 }),
+    enabled: groupReady,
   });
 
   const invalidate = () => {
@@ -878,16 +885,22 @@ function StandingsPanel({ competitionId, seasonId }: { competitionId: string; se
 
       <div className={styles.filterRow}>
         <Field label="Group">
-          <select className="tl-select" value={groupId} onChange={(event) => setGroupId(event.target.value)}>
-            <option value="">Whole season</option>
-            {(groupsQ.data ?? []).map((group) => (
+          <select
+            className="tl-select"
+            value={selectedGroupId}
+            onChange={(event) => setGroupId(event.target.value)}
+            disabled={groupsQ.isLoading}
+          >
+            {groupsQ.isLoading ? <option value="">Loading groups…</option> : groups.length === 0 ? (
+              <option value="">Whole season</option>
+            ) : groups.map((group) => (
               <option key={group.id} value={group.id}>{group.name}</option>
             ))}
           </select>
         </Field>
       </div>
 
-      {standingsQ.isLoading ? <p className={styles.muted}>Loading standings…</p> : standingsQ.isError || !standings ? (
+      {groupsQ.isLoading || standingsQ.isLoading ? <p className={styles.muted}>Loading standings…</p> : standingsQ.isError || !standings ? (
         <p className="tl-alert tl-alert-error" role="alert">Could not load standings.</p>
       ) : (
         <StandingsTable standings={standings} />
@@ -917,7 +930,7 @@ function StandingsPanel({ competitionId, seasonId }: { competitionId: string; se
               className="tl-btn tl-btn-primary"
               disabled={action.pending !== null}
               onClick={() => void action.run('publish-snapshot', async () => {
-                const snapshot = await standingsApi.snapshot({ seasonId, groupId: groupId || null, reason: reason.trim() || undefined });
+                const snapshot = await standingsApi.snapshot({ seasonId, groupId: selectedGroupId || null, reason: reason.trim() || undefined });
                 invalidate();
                 setReason('');
                 return `Snapshot version ${snapshot.version} published.`;
@@ -930,7 +943,7 @@ function StandingsPanel({ competitionId, seasonId }: { competitionId: string; se
               className="tl-btn"
               disabled={action.pending !== null || !reason.trim()}
               onClick={() => void action.run('recalculate-standings', async () => {
-                const snapshot = await standingsApi.recalculate({ seasonId, groupId: groupId || null, reason: reason.trim() });
+                const snapshot = await standingsApi.recalculate({ seasonId, groupId: selectedGroupId || null, reason: reason.trim() });
                 invalidate();
                 setReason('');
                 return `Standings recalculated as snapshot version ${snapshot.version}.`;
@@ -945,13 +958,13 @@ function StandingsPanel({ competitionId, seasonId }: { competitionId: string; se
       )}
 
       <h4>Recent snapshots</h4>
-      {snapshotsQ.isLoading ? <p className={styles.muted}>Loading snapshots…</p> : snapshotsQ.isError ? (
+      {groupsQ.isLoading || snapshotsQ.isLoading ? <p className={styles.muted}>Loading snapshots…</p> : snapshotsQ.isError ? (
         <p className="tl-alert tl-alert-error" role="alert">Could not load snapshot history.</p>
-      ) : (snapshotsQ.data ?? []).length === 0 ? (
+      ) : (snapshotsQ.data?.items ?? []).length === 0 ? (
         <p className={styles.muted}>No snapshots have been published for this scope.</p>
       ) : (
         <ul className={styles.list}>
-          {snapshotsQ.data!.map((snapshot) => (
+          {snapshotsQ.data!.items.map((snapshot) => (
             <li key={snapshot.id} className={styles.entryRow}>
               <div className={styles.entryMain}>
                 <strong>Version {snapshot.version}{snapshot.isCurrent ? ' · current' : ''}</strong>

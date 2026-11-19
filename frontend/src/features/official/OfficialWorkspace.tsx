@@ -411,8 +411,8 @@ export function EventEntry({
           <span className="tl-label">Team</span>
           <select className="tl-select" value={side} onChange={(event) => { setSide(event.target.value as 'home' | 'away' | ''); setPlayerId(''); setSecondaryId(''); }}>
             <option value="">Not team-specific</option>
-            <option value="home">{detail.match.fixture.homeTeam.name}</option>
-            <option value="away">{detail.match.fixture.awayTeam.name}</option>
+            <option value="home">{detail.match.homeTeam?.name ?? 'Home team'}</option>
+            <option value="away">{detail.match.awayTeam?.name ?? 'Away team'}</option>
           </select>
         </label>
         <label className="tl-field">
@@ -473,8 +473,8 @@ export function EventList({
 
   const teamName = (registrationId: string | null) => {
     if (!registrationId) return 'Match';
-    if (registrationId === detail.match.homeRegistration?.id) return detail.match.fixture.homeTeam.name;
-    if (registrationId === detail.match.awayRegistration?.id) return detail.match.fixture.awayTeam.name;
+    if (registrationId === detail.match.homeRegistration?.id) return detail.match.homeTeam?.name ?? 'Home team';
+    if (registrationId === detail.match.awayRegistration?.id) return detail.match.awayTeam?.name ?? 'Away team';
     return 'Team';
   };
 

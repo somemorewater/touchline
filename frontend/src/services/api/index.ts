@@ -8,7 +8,7 @@ import {
   statisticsApi,
   teamsApi,
 } from '@/lib/api/endpoints';
-import { ApiError } from '@/lib/api/client';
+import { ApiError, getAccessToken } from '@/lib/api/client';
 import type {
   AnnouncementDto,
   CompetitionDto,
@@ -269,9 +269,14 @@ function toLineup(
 
 /** Best-effort registration→player lookup. Public callers fall back to statistics only. */
 async function loadRegistrationIndex(competitionId?: string, seasonId?: string) {
+  // Player registrations require authentication; do not issue a request that
+  // is guaranteed to be rejected for anonymous/public match pages.
+  const registrationsQ = getAccessToken()
+    ? registrationsApi.list({ competitionId, seasonId }).catch(() => [] as PlayerRegistrationDto[])
+    : Promise.resolve([] as PlayerRegistrationDto[]);
   const [stats, registrations] = await Promise.all([
     statisticsApi.players({ competitionId, seasonId, limit: 500 }).catch(() => [] as PlayerStatisticsRowDto[]),
-    registrationsApi.list({ competitionId, seasonId }).catch(() => [] as PlayerRegistrationDto[]),
+    registrationsQ,
   ]);
 
   const byRegistration = new Map<string, Player>();
@@ -451,6 +456,7 @@ export const apiServices: Services = {
       const match = toMatch(
         {
           ...detail.match.fixture,
+          createdBy: null,
           match: {
             id: detail.match.id,
             status: detail.match.status,
@@ -458,20 +464,16 @@ export const apiServices: Services = {
             awayScore: detail.match.awayScore,
             resultConfirmedAt: detail.match.resultConfirmedAt,
           },
-          homeTeam: detail.match.homeTeam
-            ? {
-                id: detail.match.homeTeam.id,
-                name: detail.match.homeTeam.name,
-                registrationId: detail.match.homeRegistration?.id ?? '',
-              }
-            : detail.match.fixture.homeTeam,
-          awayTeam: detail.match.awayTeam
-            ? {
-                id: detail.match.awayTeam.id,
-                name: detail.match.awayTeam.name,
-                registrationId: detail.match.awayRegistration?.id ?? '',
-              }
-            : detail.match.fixture.awayTeam,
+          homeTeam: {
+            id: detail.match.homeTeam?.id ?? '',
+            name: detail.match.homeTeam?.name ?? 'Home team',
+            registrationId: detail.match.homeRegistration?.id ?? '',
+          },
+          awayTeam: {
+            id: detail.match.awayTeam?.id ?? '',
+            name: detail.match.awayTeam?.name ?? 'Away team',
+            registrationId: detail.match.awayRegistration?.id ?? '',
+          },
         },
         competitionId,
       );

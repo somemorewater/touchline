@@ -544,7 +544,10 @@ export const standingsApi = {
     return request<StandingsSnapshotDto>('/standings/recalculate', { method: 'POST', body: input });
   },
   snapshots(query: { seasonId: string; groupId?: string; limit?: number }) {
-    return request<StandingsSnapshotDto[]>('/standings/snapshots', { query: query as Query });
+    return request<{ items: StandingsSnapshotDto[]; limit: number; offset: number }>(
+      '/standings/snapshots',
+      { query: query as Query },
+    );
   },
   snapshotById(id: string) {
     return request<StandingsSnapshotDto>(`/standings/snapshots/${id}`, {});

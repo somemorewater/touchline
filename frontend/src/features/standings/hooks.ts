@@ -30,12 +30,16 @@ export function useStandingsFor(competition: Competition | undefined, seasonId: 
   const entriesQ = useTeamEntries(competition?.id, seasonId);
 
   const groups = useMemo(() => leaguesQ.data ?? [], [leaguesQ.data]);
+  // A grouped season has no whole-season table. Wait for the groups query to
+  // settle before falling back to the implicit "All teams" target, otherwise
+  // the server rejects a whole-season request with 400.
+  const groupsReady = !leaguesQ.isLoading && !leaguesQ.isError;
   const targets = useMemo(
     () =>
-      competition && seasonId
+      competition && seasonId && groupsReady
         ? targetsFor(groups, competition.id, seasonId)
         : [],
-    [competition, seasonId, groups],
+    [competition, seasonId, groups, groupsReady],
   );
 
   const queries = useQueries({
