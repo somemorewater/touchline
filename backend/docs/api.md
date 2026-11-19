@@ -250,7 +250,7 @@ Then call protected routes with `Authorization: Bearer <accessToken>`.
 - Groups belong to exactly one season and cannot be moved between seasons.
 - A team entity is global. `team_registrations` is its season participation; a team may have at most one entry per season.
 - Creating a team with `seasonId` also creates its entry. Scoped administrators must provide `seasonId` to prove scope; a super admin may create a standalone team entity.
-- Captain provisioning accepts an administrator-supplied temporary password of 12–128 characters. Passwords and hashes never appear in responses.
+- Captain provisioning accepts an administrator-supplied temporary password of 8–128 characters. Passwords and hashes never appear in responses.
 - Player registration submissions accept either `playerId` or an inline `player` object, never both. Inline creation supports `fullName`, `department`, `dateOfBirth`, `position`, `preferredFoot` and `contactEmail`.
 - The lifecycle is `submitted → under_review → approved|rejected`, plus `withdrawn` from pending states. `rejected` and `withdrawn` rows can be resubmitted without deleting history.
 

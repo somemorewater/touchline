@@ -4,7 +4,7 @@ import { uuidSchema } from '../../shared/schema.js';
 export const adminAccountCreateSchema = z
   .object({
     email: z.email(),
-    password: z.string().min(12).max(128),
+    password: z.string().min(8).max(128),
     displayName: z.string().trim().min(2).max(160),
     role: z.enum(['competition_admin', 'super_admin']),
     competitionIds: z.array(uuidSchema).max(100).optional(),

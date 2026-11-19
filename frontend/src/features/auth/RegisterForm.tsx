@@ -12,7 +12,7 @@ function safeReturnTo(value: string | null): string {
   return value.startsWith('/') && !value.startsWith('//') ? value : '/account';
 }
 
-const MIN_PASSWORD = 12;
+const MIN_PASSWORD = 8;
 
 export function RegisterForm() {
   const router = useRouter();

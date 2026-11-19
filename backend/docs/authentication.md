@@ -2,7 +2,7 @@
 
 ## Credentials
 
-`POST /api/v1/auth/register` accepts `email`, `displayName` and a 12+ character password. The body is strict: unknown fields such as `role`, `permissions` or `userId` are rejected with `400 VALIDATION_ERROR`. Registration always assigns only the seeded `registered_user` role; it never accepts client-supplied authorization data.
+`POST /api/v1/auth/register` accepts `email`, `displayName` and an 8+ character password. The body is strict: unknown fields such as `role`, `permissions` or `userId` are rejected with `400 VALIDATION_ERROR`. Registration always assigns only the seeded `registered_user` role; it never accepts client-supplied authorization data.
 
 `POST /api/v1/auth/login` verifies the Argon2id password and creates a server-side **session**. It returns an access JWT in JSON and sets two HTTP-only, SameSite=Lax cookies:
 

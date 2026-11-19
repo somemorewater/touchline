@@ -447,12 +447,12 @@ function CaptainPanel({
                 <Field label="Email">
                   <input className="tl-input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
                 </Field>
-                <Field label="Temporary password" hint="At least 12 characters.">
-                  <input className="tl-input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} required />
+                <Field label="Temporary password" hint="At least 8 characters.">
+                  <input className="tl-input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} maxLength={128} required />
                 </Field>
               </div>
               <div className={styles.formActions}>
-                <button type="submit" className="tl-btn tl-btn-primary" disabled={pending !== null || password.length < 12}>
+                <button type="submit" className="tl-btn tl-btn-primary" disabled={pending !== null || password.length < 8}>
                   Create account and assign
                 </button>
               </div>

@@ -63,7 +63,7 @@ Team-entry status/group changes and captain changes require a `planned` or `acti
 
 ## Captain accounts
 
-`POST /api/v1/captains` is the only provisioning path. The request carries email, display name, a temporary password of 12–128 characters, and a `teamRegistrationId`.
+`POST /api/v1/captains` is the only provisioning path. The request carries email, display name, a temporary password of 8–128 characters, and a `teamRegistrationId`.
 
 The service:
 

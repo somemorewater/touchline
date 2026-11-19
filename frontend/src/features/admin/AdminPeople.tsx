@@ -537,8 +537,8 @@ function AdminAccountsPanel({ competitionId }: { competitionId?: string }) {
           <Field label="Email">
             <input className="tl-input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           </Field>
-          <Field label="Temporary password" hint="At least 12 characters.">
-            <input className="tl-input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} required />
+          <Field label="Temporary password" hint="At least 8 characters.">
+            <input className="tl-input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} maxLength={128} required />
           </Field>
           <Field label="Role">
             <select className="tl-select" value={role} onChange={(event) => setRole(event.target.value as 'competition_admin' | 'super_admin')}>
@@ -569,7 +569,7 @@ function AdminAccountsPanel({ competitionId }: { competitionId?: string }) {
         ) : null}
 
         <div className={styles.formActions}>
-          <button type="submit" className="tl-btn tl-btn-primary" disabled={action.pending !== null || password.length < 12 || (role === 'competition_admin' && scopes.length === 0)}>
+          <button type="submit" className="tl-btn tl-btn-primary" disabled={action.pending !== null || password.length < 8 || (role === 'competition_admin' && scopes.length === 0)}>
             <Plus size={15} aria-hidden /> Create administrator
           </button>
         </div>
