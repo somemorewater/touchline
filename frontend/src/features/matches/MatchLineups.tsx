@@ -20,6 +20,7 @@ import type {
 } from '@/types';
 import { EventBadges, EventLegend } from './LineupEventBadges';
 import { LineupPitch, type PitchTeam } from './LineupPitch';
+import { positionLabel } from '@/lib/positions';
 import { buildLineupEventMap, type LineupEvent } from './lib/lineupEvents';
 import styles from './Lineups.module.css';
 
@@ -123,7 +124,7 @@ function BenchList({
             const info = players.get(entry.playerId);
             const name = info?.fullName ?? entry.playerId;
             const detail = [
-              entry.position ?? 'Position not set',
+              positionLabel(entry.position) ?? 'Position not set',
               entry.role === 'unavailable' ? entry.unavailableReason ?? 'Unavailable' : null,
             ].filter(Boolean).join(' · ');
 
@@ -254,7 +255,7 @@ function PlayerPanel({
             <p className={styles.panelMeta}>
               {entry.shirtNumber ? `#${entry.shirtNumber}` : 'Number not set'}
               {' · '}
-              {entry.position ?? 'Position not set'}
+              {positionLabel(entry.position) ?? 'Position not set'}
               {entry.isCaptain ? ' · Captain' : ''}
               {entry.role === 'unavailable' ? ` · ${entry.unavailableReason ?? 'Unavailable'}` : ''}
             </p>

@@ -271,7 +271,7 @@ Then call protected routes with `Authorization: Bearer <accessToken>`.
 - A lineup belongs to one participating, approved team entry. A draft may be incomplete; `submit` and `confirm` require a supported formation, eleven starters, one goalkeeper, one starting captain, unique players/shirt numbers, coordinates matching formation slots and approved eligible registrations.
 - Supported formations are `4-3-3`, `4-4-2`, `4-2-3-1`, `3-5-2`, `3-4-3`, `4-1-4-1` and `5-3-2`. `GET /lineups/formations` returns the exact slot coordinates.
 - Captains may edit/submit/withdraw only their own team's lineup before kickoff. Only competition administrators confirm or return. Administrative edits after kickoff or on a confirmed lineup require `reason` and are audited.
-- The substitute limit is `competition_rules.rules.maxSubstitutes` when it is a non-negative integer (capped at 30), otherwise 12.
+- A lineup may contain 0–11 substitutes. `competition_rules.rules.maxSubstitutes` may lower the season limit; higher values are capped at 11.
 - Statistics and live standings are derived on read. There is no editable aggregate endpoint and no background recalculation.
 - Statistics omit assists and minutes played because the event model cannot derive them reliably; absent data is omitted rather than returned as zero.
 - Standings use confirmed full-time results on completed fixtures, configured points and tie-breakers, then deterministic team name and registration ID. Grouped seasons require `groupId`.

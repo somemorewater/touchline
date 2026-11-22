@@ -4,21 +4,67 @@
 
 - Node.js 22+
 - pnpm 10+
-- PostgreSQL 16 (or a compatible supported version)
+- Docker Engine with the Docker Compose plugin
 
 ## Setup
+
+From the repository root, start PostgreSQL 16 and wait for it to become healthy:
+
+```bash
+docker compose up -d postgres
+docker compose exec postgres pg_isready -U touchline -d touchline
+```
+
+Then set up and run the API:
 
 ```bash
 cd backend
 pnpm install
 cp .env.example .env
-# edit DATABASE_URL and JWT_ACCESS_SECRET
+# edit DATABASE_URL to match the Compose database and JWT_ACCESS_SECRET
 pnpm db:migrate
 pnpm db:seed
 pnpm dev
 ```
 
 The server loads `.env` from the current working directory when present. Variables already set in the shell take precedence over `.env`, which is useful for one-off environments. `.env` is ignored by Git.
+
+## Local PostgreSQL with Docker Compose
+
+The `postgres` service uses the official `postgres:16` image and persists data in the named `touchline_postgres-data` volume. The Compose defaults are database `touchline`, user `touchline`, and host port `5432`; override them with `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` in a local `.env` if needed. Port `55433` is also published for compatibility with existing local `DATABASE_URL` files.
+
+```bash
+# Start or restart PostgreSQL; data is kept.
+docker compose up -d postgres
+docker compose restart postgres
+
+# Check container status and database readiness.
+docker compose ps postgres
+docker compose exec postgres pg_isready -U touchline -d touchline
+
+# Inspect logs.
+docker compose logs postgres
+
+# Stop PostgreSQL; the container and data are kept.
+docker compose stop postgres
+
+# Remove the container and network; the named volume and data are kept.
+docker compose down
+
+# WARNING: these permanently delete the local database volume and its data.
+# `down -v` also deletes the pgAdmin volume.
+docker compose down -v
+docker volume rm touchline_postgres-data
+```
+
+After the healthcheck passes, apply the committed Drizzle migrations from `backend/`:
+
+```bash
+pnpm db:migrate
+pnpm db:seed
+```
+
+`db:migrate` is idempotent and does not reset existing data. `db:seed` converges baseline roles and permissions only. Do not run destructive database initialization or reset commands as part of normal startup.
 
 ## Environment variables
 

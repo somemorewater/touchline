@@ -1,4 +1,5 @@
 import type { PlayerPosition } from '@/types';
+import { positionCategory } from './positions';
 
 /** Formations the demo data can choose from. Any 10-outfield formation string is also parsed. */
 export const SUPPORTED_FORMATIONS = [
@@ -109,7 +110,8 @@ export function placeStarters<T extends { position?: PlayerPosition; slot?: Pitc
     const unknown: T[] = [];
 
     for (const player of players) {
-      if (player.position) groups[player.position].push(player);
+      const category = positionCategory(player.position);
+      if (category) groups[category].push(player);
       else unknown.push(player);
     }
 

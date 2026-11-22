@@ -14,6 +14,7 @@ import type {
 } from '@/types';
 import { known } from '@/types';
 import { placeStarters, rowCategories, formationRows, SUPPORTED_FORMATIONS } from '@/lib/formation';
+import { positionCategory } from '@/lib/positions';
 import { roundRobin } from '@/lib/roundRobin';
 import { COMPETITION_ID, SEASON_ID, registrations, teams as baseTeams } from './afit-u25';
 
@@ -210,7 +211,7 @@ function buildLineup(match: Match, teamId: string, players: Player[], clubCaptai
         playerId: player.id,
         role: 'starter' as const,
         shirtNumber: player.shirtNumber,
-        position: player.position,
+        position: positionCategory(player.position) ?? undefined,
         slot,
         isCaptain: player.id === captain,
       })),
@@ -218,13 +219,13 @@ function buildLineup(match: Match, teamId: string, players: Player[], clubCaptai
         playerId: p.id,
         role: 'substitute' as const,
         shirtNumber: p.shirtNumber,
-        position: p.position,
+        position: positionCategory(p.position) ?? undefined,
       })),
       ...unavailable.map((p) => ({
         playerId: p.id,
         role: 'unavailable' as const,
         shirtNumber: p.shirtNumber,
-        position: p.position,
+        position: positionCategory(p.position) ?? undefined,
         unavailableReason: unavailableReasons[hash(`${match.id}:${teamId}:${p.id}:reason`) % unavailableReasons.length]!,
       })),
     ],

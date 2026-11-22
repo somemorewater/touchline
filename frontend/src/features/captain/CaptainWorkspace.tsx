@@ -1,17 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, ClipboardList, Users } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
-import { LineupEditor } from '@/features/lineups/LineupEditor';
+import { LineupEditor, LineupReadView } from '@/features/lineups/LineupEditor';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { errorMessage } from '@/lib/api/client';
 import { fixturesApi, lineupsApi, registrationsApi, teamsApi } from '@/lib/api/endpoints';
 import type { CaptainTeamDto, PlayerRegistrationDto } from '@/lib/api/types';
 import { formatDateTime } from '@/lib/format';
 import { statusLabel } from '@/lib/match';
+import { PLAYER_POSITION_OPTIONS, positionLabel, type PlayerPosition } from '@/lib/positions';
 import { DISPLAY_TIME_ZONE, type MatchStatus } from '@/types';
 import styles from '@/components/layout/Workspace.module.css';
 
@@ -173,6 +174,7 @@ function CaptainLineupPanel({
   teamName: string;
   competitionId: string;
 }) {
+  const [editing, setEditing] = useState(false);
   const lineupsQ = useQuery({
     queryKey: ['lineups', matchId],
     queryFn: () => lineupsApi.forMatch(matchId),
@@ -182,6 +184,12 @@ function CaptainLineupPanel({
   if (lineupsQ.isError) return <p className="tl-alert tl-alert-error" role="alert">Could not load the lineup for this match.</p>;
 
   const existing = lineupsQ.data?.find((lineup) => lineup.teamRegistrationId === teamRegistrationId) ?? null;
+  if (existing && !editing) {
+    return <div className={styles.editorWrap}><LineupReadView lineup={existing} teamRegistrationId={teamRegistrationId} teamName={teamName} onEdit={() => setEditing(true)} /></div>;
+  }
+  if (!existing && !editing) {
+    return <div className={styles.editorWrap}><section className="tl-card"><h3>{teamName}</h3><p className="tl-muted">No lineup has been saved for this match.</p><button type="button" className="tl-btn tl-btn-primary" onClick={() => setEditing(true)}>Create Lineup</button></section></div>;
+  }
   return (
     <div className={styles.editorWrap}>
       <LineupEditor
@@ -191,6 +199,8 @@ function CaptainLineupPanel({
         teamName={teamName}
         competitionId={competitionId}
         existing={existing}
+        onCancel={() => setEditing(false)}
+        onSaved={() => setEditing(false)}
       />
     </div>
   );
@@ -206,6 +216,8 @@ function RegistrationSection({
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [editingPlayer, setEditingPlayer] = useState<PlayerRegistrationDto | null>(null);
+  const [editNotice, setEditNotice] = useState<string | null>(null);
 
   return (
     <div className="tl-stack-sm">
@@ -222,16 +234,18 @@ function RegistrationSection({
                 <th scope="col" className="num">No.</th>
                 <th scope="col">Status</th>
                 <th scope="col">Note</th>
+                <th scope="col">Changes</th>
               </tr>
             </thead>
             <tbody>
               {players.map((player) => (
                 <tr key={player.id}>
                   <th scope="row">{player.player.fullName}</th>
-                  <td>{player.player.position ?? 'Not recorded'}</td>
+                  <td>{positionLabel(player.player.position) ?? 'Not recorded'}</td>
                   <td className="num">{player.shirtNumber ?? '–'}</td>
                   <td><span className="tl-badge">{registrationLabel(player.status)}</span></td>
                   <td>{player.reviewNote ?? '—'}</td>
+                  <td>{player.pendingEdit ? <span className="tl-badge">Edit pending review</span> : player.status === 'approved' ? <button type="button" className="tl-btn tl-btn-sm" onClick={() => setEditingPlayer(player)}>Edit</button> : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -254,17 +268,66 @@ function RegistrationSection({
           }}
         />
       ) : null}
+      {editNotice ? <p className="tl-alert tl-alert-success" role="status">{editNotice}</p> : null}
+      {editingPlayer ? <EditPlayerRegistrationDialog player={editingPlayer} onCancel={() => setEditingPlayer(null)} onDone={() => { setEditingPlayer(null); setEditNotice(`${editingPlayer.player.fullName}: changes submitted for administrator review.`); onChanged(); }} /> : null}
     </div>
   );
 }
 
-const POSITIONS = [
-  ['', 'Position not specified'],
-  ['GK', 'Goalkeeper'],
-  ['DF', 'Defender'],
-  ['MF', 'Midfielder'],
-  ['FW', 'Forward'],
-] as const;
+function EditPlayerRegistrationDialog({ player, onCancel, onDone }: { player: PlayerRegistrationDto; onCancel: () => void; onDone: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const initialFocus = useRef<HTMLElement | null>(null);
+  const [fullName, setFullName] = useState(player.player.fullName);
+  const [department, setDepartment] = useState(player.player.department ?? '');
+  const [position, setPosition] = useState(player.player.position ?? '');
+  const [shirtNumber, setShirtNumber] = useState(player.shirtNumber?.toString() ?? '');
+  const [matriculationNumber, setMatriculationNumber] = useState(player.matriculationNumber ?? '');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dateOfBirth, setDateOfBirth] = useState(player.player.dateOfBirth ?? '');
+  const [preferredFoot, setPreferredFoot] = useState(player.player.preferredFoot ?? '');
+  const [contactEmail, setContactEmail] = useState(player.player.contactEmail ?? '');
+  const dirty = fullName !== player.player.fullName || department !== (player.player.department ?? '') || position !== (player.player.position ?? '') || shirtNumber !== (player.shirtNumber?.toString() ?? '') || matriculationNumber !== (player.matriculationNumber ?? '') || dateOfBirth !== (player.player.dateOfBirth ?? '') || preferredFoot !== (player.player.preferredFoot ?? '') || contactEmail !== (player.player.contactEmail ?? '');
+
+  useEffect(() => {
+    initialFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.showModal();
+    return () => initialFocus.current?.focus();
+  }, []);
+
+  const dismiss = () => {
+    if (pending) return;
+    if (dirty && !window.confirm('Discard your unsaved player changes?')) return;
+    onCancel();
+  };
+  const submit = async () => {
+    const shirt = shirtNumber.trim() ? Number(shirtNumber) : null;
+    if (fullName.trim().length < 2 || (shirt !== null && (!Number.isInteger(shirt) || shirt < 1 || shirt > 99))) { setError('Check the player name and shirt number.'); return; }
+    setPending(true); setError(null);
+    try {
+      await registrationsApi.proposeEdit(player.id, { player: { fullName: fullName.trim(), department: department.trim() || null, dateOfBirth: dateOfBirth || null, position: (position || null) as PlayerPosition | null, preferredFoot: preferredFoot ? preferredFoot as 'left' | 'right' | 'both' : null, contactEmail: contactEmail.trim() || null }, matriculationNumber: matriculationNumber.trim() || null, shirtNumber: shirt });
+      onDone();
+    } catch (cause) { setError(errorMessage(cause)); } finally { setPending(false); }
+  };
+  return <dialog ref={dialogRef} className={styles.playerDialog} aria-labelledby="player-edit-title" onCancel={event => { event.preventDefault(); dismiss(); }} onClick={event => { if (event.target === dialogRef.current) dismiss(); }}>
+    <form className={styles.playerDialogForm} onSubmit={event => { event.preventDefault(); void submit(); }}>
+      <header className={styles.playerDialogHead}><div><p className="tl-muted">Edit registered player</p><h2 id="player-edit-title">{player.player.fullName}</h2></div><button type="button" className="tl-btn tl-btn-sm" onClick={dismiss} disabled={pending} aria-label="Close player editor">Close</button></header>
+      <p className="tl-muted">Changes stay pending until an administrator reviews them. The approved information remains in use meanwhile.</p>
+      {error ? <p className="tl-alert tl-alert-error" role="alert">{error}</p> : null}
+      <div className={styles.formGrid}>
+        <label className="tl-field"><span className="tl-label">Full name</span><input className="tl-input" autoFocus value={fullName} onChange={e => setFullName(e.target.value)} required maxLength={180} /></label>
+        <label className="tl-field"><span className="tl-label">Department</span><input className="tl-input" value={department} onChange={e => setDepartment(e.target.value)} maxLength={120} /></label>
+        <label className="tl-field"><span className="tl-label">Date of birth</span><input className="tl-input" type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} /></label>
+        <label className="tl-field"><span className="tl-label">Position</span><select className="tl-select" value={position} onChange={e => setPosition(e.target.value)}>{PLAYER_POSITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+        <label className="tl-field"><span className="tl-label">Preferred foot</span><select className="tl-select" value={preferredFoot} onChange={e => setPreferredFoot(e.target.value)}><option value="">Not recorded</option><option value="left">Left</option><option value="right">Right</option><option value="both">Both</option></select></label>
+        <label className="tl-field"><span className="tl-label">Contact email</span><input className="tl-input" type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} maxLength={320} /></label>
+        <label className="tl-field"><span className="tl-label">Matriculation number</span><input className="tl-input" value={matriculationNumber} onChange={e => setMatriculationNumber(e.target.value)} maxLength={80} /></label>
+        <label className="tl-field"><span className="tl-label">Shirt number</span><input className="tl-input" type="number" min={1} max={99} value={shirtNumber} onChange={e => setShirtNumber(e.target.value)} /></label>
+      </div>
+      <footer className={styles.playerDialogActions}><button type="button" className="tl-btn" onClick={dismiss} disabled={pending}>Cancel</button><button type="submit" className="tl-btn tl-btn-primary" disabled={pending}>{pending ? 'Submitting…' : 'Submit for review'}</button></footer>
+    </form>
+  </dialog>;
+}
 
 function RegisterPlayerForm({
   registration,
@@ -276,7 +339,6 @@ function RegisterPlayerForm({
   const [fullName, setFullName] = useState('');
   const [department, setDepartment] = useState('');
   const [position, setPosition] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
   const [matriculationNumber, setMatriculationNumber] = useState('');
   const [shirtNumber, setShirtNumber] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -301,8 +363,7 @@ function RegisterPlayerForm({
         player: {
           fullName: fullName.trim(),
           department: department.trim() || null,
-          position: (position || null) as 'GK' | 'DF' | 'MF' | 'FW' | null,
-          dateOfBirth: dateOfBirth || null,
+          position: (position || null) as PlayerPosition | null,
         },
         matriculationNumber: matriculationNumber.trim() || null,
         shirtNumber: shirt,
@@ -336,12 +397,8 @@ function RegisterPlayerForm({
         <label className="tl-field">
           <span className="tl-label">Position</span>
           <select className="tl-select" value={position} onChange={(event) => setPosition(event.target.value)}>
-            {POSITIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {PLAYER_POSITION_OPTIONS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
           </select>
-        </label>
-        <label className="tl-field">
-          <span className="tl-label">Date of birth</span>
-          <input className="tl-input" type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
         </label>
         <label className="tl-field">
           <span className="tl-label">Matriculation number</span>

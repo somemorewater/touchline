@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { idParamsSchema } from '../../shared/validation.js';
 import {
   errorResponse,
@@ -8,6 +9,8 @@ import {
 import { ok } from '../../shared/response.js';
 import {
   approvePlayerRegistration,
+  proposePlayerRegistrationEdit,
+  reviewPlayerRegistrationEdit,
   getPlayerRegistration,
   getPlayerRegistrationHistory,
   listPlayerRegistrations,
@@ -21,6 +24,8 @@ import {
   playerRegistrationRejectSchema,
   playerRegistrationReviewSchema,
   playerRegistrationSubmitSchema,
+  playerRegistrationEditSchema,
+  playerRegistrationEditReviewSchema,
 } from './schemas.js';
 
 const tags = ['Player registrations'];
@@ -103,6 +108,23 @@ export async function registrationRoutes(app: FastifyInstance) {
       return ok(reply, await getPlayerRegistrationHistory(req.auth!, id));
     },
   );
+
+  app.patch('/player-registrations/:id', {
+    preHandler: app.authenticate,
+    schema: { ...secureSchema, summary: 'Submit proposed registration edits for administrative review', params: idParamsSchema.params, body: jsonSchema(playerRegistrationEditSchema) },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    return ok(reply, await proposePlayerRegistrationEdit(req.auth!, id, playerRegistrationEditSchema.parse(req.body)));
+  });
+
+  app.post('/player-registrations/:id/edits/:editId/review', {
+    preHandler: app.authenticate,
+    schema: { ...secureSchema, summary: 'Approve or reject proposed player registration edits', params: jsonSchema(z.object({ id: z.uuid(), editId: z.uuid() }).strict()), body: jsonSchema(playerRegistrationEditReviewSchema) },
+  }, async (req, reply) => {
+    const { id, editId } = req.params as { id: string; editId: string };
+    const body = req.body as { decision: 'approve' | 'reject'; reviewNote?: string | null };
+    return ok(reply, await reviewPlayerRegistrationEdit(req.auth!, id, editId, body));
+  });
 
   app.post(
     '/player-registrations/:id/review',

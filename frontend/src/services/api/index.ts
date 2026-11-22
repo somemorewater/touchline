@@ -14,6 +14,7 @@ import type {
   CompetitionDto,
   FixtureDto,
   LineupDto,
+  LineupPosition,
   MatchDetailDto,
   MatchEventDto,
   MatchStatus,
@@ -33,7 +34,6 @@ import type {
   MatchLineup,
   MatchStatus as ViewMatchStatus,
   Player,
-  PlayerPosition,
   PlayerStatistics,
   Season,
   Team,
@@ -257,7 +257,7 @@ function toLineup(
       playerId: registrationPlayer.get(player.playerRegistrationId) ?? player.playerRegistrationId,
       role: player.role,
       shirtNumber: player.shirtNumber ?? undefined,
-      position: (player.position ?? undefined) as PlayerPosition | undefined,
+      position: (player.position ?? undefined) as LineupPosition | undefined,
       slot:
         player.x !== null && player.y !== null
           ? { x: Number(player.x), y: Number(player.y) }

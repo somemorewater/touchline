@@ -6,6 +6,8 @@
  * optional/nullable field reflects the real contract.
  */
 
+import type { PlayerPosition } from '@/lib/positions';
+
 export type RoleName =
   | 'visitor'
   | 'registered_user'
@@ -124,7 +126,7 @@ export interface PlayerDto {
   fullName: string;
   department: string | null;
   dateOfBirth: string | null;
-  position: 'GK' | 'DF' | 'MF' | 'FW' | null;
+  position: PlayerPosition | null;
   preferredFoot: 'left' | 'right' | 'both' | null;
   photoFileId: string | null;
   contactEmail: string | null;
@@ -153,6 +155,7 @@ export interface PlayerRegistrationDto {
   teamRegistration: TeamEntryDto;
   season: SeasonDto;
   competition: CompetitionDto;
+  pendingEdit?: { id: string; proposedBy: string; proposed: Record<string, unknown>; status: string; createdAt: string } | null;
 }
 
 export interface PlayerRegistrationHistoryDto {
@@ -318,7 +321,7 @@ export interface MatchResultDto {
 }
 
 export type LineupStatus = 'draft' | 'submitted' | 'confirmed' | 'returned' | 'published';
-export type LineupPosition = 'GK' | 'DF' | 'MF' | 'FW';
+export type LineupPosition = PlayerPosition;
 
 export interface LineupPlayerDto {
   playerRegistrationId: string;

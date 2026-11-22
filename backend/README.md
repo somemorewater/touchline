@@ -6,20 +6,29 @@ Fastify modular monolith for TOUCHLINE. PostgreSQL is the source of truth; Drizz
 
 - Node.js 22+
 - pnpm 10+
-- PostgreSQL 16 (or a compatible supported version)
+- Docker Engine with the Docker Compose plugin
 
 ## Setup
 
-1. Create a PostgreSQL database and user.
-2. Copy `.env.example` to `.env` and set `DATABASE_URL` and a private `JWT_ACCESS_SECRET` of at least 32 characters.
+1. From the repository root, start PostgreSQL 16 and wait for its healthcheck:
+
+```bash
+docker compose up -d postgres
+docker compose exec postgres pg_isready -U touchline -d touchline
+```
+
+2. Copy `.env.example` to `.env` and set `DATABASE_URL` (to match the Compose database) and a private `JWT_ACCESS_SECRET` of at least 32 characters. The Compose database listens on `localhost:5432`.
 3. Install dependencies and apply the committed migrations:
 
 ```bash
+cd backend
 pnpm install
 pnpm db:migrate
 pnpm db:seed
 pnpm dev
 ```
+
+The database uses the named `touchline_postgres-data` volume. `docker compose stop postgres` preserves it, while `docker compose down -v` permanently deletes it.
 
 The API listens on `:4000` by default, OpenAPI UI is at `/docs`, and routes are under `/api/v1`.
 

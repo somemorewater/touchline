@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { uuidSchema } from '../../shared/schema.js';
+import { acceptedPlayerPositionCodes } from '../../shared/positions.js';
 
 export const lineupRoles = ['starter', 'substitute'] as const;
-export const lineupPositions = ['GK', 'DF', 'MF', 'FW'] as const;
+export const lineupPositions = acceptedPlayerPositionCodes;
 export const lineupStatuses = [
   'draft',
   'submitted',
@@ -10,6 +11,8 @@ export const lineupStatuses = [
   'returned',
   'published',
 ] as const;
+
+export const MAX_LINEUP_SUBSTITUTES = 11;
 
 const coordinate = z.number().min(0).max(100);
 
@@ -31,6 +34,13 @@ export const lineupPlayerInputSchema = z
     { message: 'Pitch coordinates must be provided as a pair.', path: ['x'] },
   );
 
+const lineupPlayersSchema = z.array(lineupPlayerInputSchema).max(40).superRefine((players, ctx) => {
+  const substitutes = players.filter((player) => player.role === 'substitute').length;
+  if (substitutes > MAX_LINEUP_SUBSTITUTES) {
+    ctx.addIssue({ code: 'custom', message: `A lineup can contain at most ${MAX_LINEUP_SUBSTITUTES} substitutes.`, path: [] });
+  }
+});
+
 const formation = z
   .string()
   .trim()
@@ -41,14 +51,14 @@ export const lineupCreateSchema = z
   .object({
     teamRegistrationId: uuidSchema,
     formation: formation.nullable().optional(),
-    players: z.array(lineupPlayerInputSchema).max(40).default([]),
+    players: lineupPlayersSchema.default([]),
   })
   .strict();
 
 export const lineupUpdateSchema = z
   .object({
     formation: formation.nullable().optional(),
-    players: z.array(lineupPlayerInputSchema).max(40).optional(),
+    players: lineupPlayersSchema.optional(),
     reason: z.string().trim().min(1).max(2000).optional(),
   })
   .strict()

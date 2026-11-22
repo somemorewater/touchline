@@ -53,7 +53,7 @@ Creation requires:
 - the caller captains that team entry or manages the competition;
 - the fixture is not `cancelled` or `abandoned`, and the match has not kicked off.
 
-Every player row carries `playerRegistrationId`, `role` (`starter`/`substitute`), `position` (`GK`/`DF`/`MF`/`FW`), `shirtNumber`, optional `x`/`y` and optional `isCaptain`.
+Every player row carries `playerRegistrationId`, `role` (`starter`/`substitute`), `position` (`GK`/`DF`/`MF`/`FW`), `shirtNumber`, optional `x`/`y` and optional `isCaptain`. Lineup positions remain the broad formation lines; a player's detailed profile position is mapped to one of them.
 
 ## Validation
 
@@ -111,7 +111,7 @@ Coordinates are persisted as `numeric(5,2)`; comparison uses a `0.01` tolerance.
 
 ## Substitute limit
 
-Phase 3 defines no squad-size rule. The conservative, extensible default is **12 substitutes**. If `competition_rules.rules.maxSubstitutes` is a non-negative integer it is used instead, capped at 30. An absent or malformed value falls back to 12. The limit is read inside the validation transaction and appears in the `400` message when exceeded.
+Lineups allow **0–11 substitutes**. `competition_rules.rules.maxSubstitutes` can set a lower non-negative season limit; larger configured values are capped at 11. An absent or malformed value uses the platform maximum of 11. The limit is checked for draft writes and again during submission/review validation.
 
 ## Editing and kickoff
 

@@ -1,5 +1,6 @@
 import { Info } from 'lucide-react';
 import { orientSlot, placeStarters } from '@/lib/formation';
+import { positionLabel } from '@/lib/positions';
 import type { LineupPlayer, MatchLineup, Player } from '@/types';
 import { EventBadges } from './LineupEventBadges';
 import type { LineupEvent } from './lib/lineupEvents';
@@ -79,7 +80,7 @@ function PlayerMarker({
   const label = [
     player.shirtNumber ? `Number ${player.shirtNumber}` : null,
     name,
-    player.position ?? 'position not set',
+    positionLabel(player.position) ?? 'position not set',
     player.isCaptain ? 'captain' : null,
     `${teamName} starting XI`,
     ...playerEvents.map((event) => `${event.label} ${event.minute}'`),

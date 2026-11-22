@@ -37,12 +37,12 @@ import {
   resolveLineupVisibility,
   sanitizeLineup,
 } from './visibility.js';
-import type { LineupListQuery, LineupPlayerInput } from './schemas.js';
+import { MAX_LINEUP_SUBSTITUTES, type LineupListQuery, type LineupPlayerInput } from './schemas.js';
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = Transaction | typeof db;
 
-export const DEFAULT_MAX_SUBSTITUTES = 12;
+export const DEFAULT_MAX_SUBSTITUTES = MAX_LINEUP_SUBSTITUTES;
 
 interface MatchContextRow {
   scope: MatchScope;
@@ -124,7 +124,7 @@ async function maxSubstitutesForSeason(
     .where(eq(competitionRules.seasonId, seasonId));
   const configured = rules?.rules?.maxSubstitutes;
   if (typeof configured === 'number' && Number.isInteger(configured) && configured >= 0) {
-    return Math.min(configured, 30);
+    return Math.min(configured, MAX_LINEUP_SUBSTITUTES);
   }
   return DEFAULT_MAX_SUBSTITUTES;
 }
@@ -243,6 +243,11 @@ async function validateLineupSelection(
   const starters = inputs.filter((player) => player.role === 'starter');
   const substitutes = inputs.filter((player) => player.role === 'substitute');
 
+  const limit = await maxSubstitutesForSeason(executor, scope.seasonId);
+  if (substitutes.length > limit) {
+    throw badRequest(`At most ${limit} substitutes are permitted for this season.`);
+  }
+
   if (!options.requireComplete) {
     return { formation, starters, substitutes };
   }
@@ -252,10 +257,6 @@ async function validateLineupSelection(
   }
   if (starters.length !== 11) {
     throw badRequest('A complete starting XI requires exactly eleven starters.');
-  }
-  const limit = await maxSubstitutesForSeason(executor, scope.seasonId);
-  if (substitutes.length > limit) {
-    throw badRequest(`At most ${limit} substitutes are permitted for this season.`);
   }
   const captains = starters.filter((player) => player.isCaptain);
   if (captains.length !== 1) {

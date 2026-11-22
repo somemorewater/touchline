@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { useActiveCompetition } from '@/features/competitions/CompetitionContext';
 import { useTeamMap } from '@/features/teams/hooks';
+import { positionLabel } from '@/lib/positions';
 import { usePlayers } from './hooks';
 import styles from './Players.module.css';
 
@@ -46,7 +47,7 @@ export function PlayersView() {
                 <span className="num">{p.shirtNumber ?? '–'}</span>
                 <strong>{p.fullName}</strong>
                 <span>{teams.get(p.teamId)?.name}</span>
-                <span>{p.position ?? 'Position not set'}</span>
+                <span>{positionLabel(p.position) ?? 'Position not set'}</span>
               </Link>
             </li>
           ))}

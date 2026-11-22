@@ -6,6 +6,7 @@ import { Section } from '@/components/ui/Section';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { useActiveCompetition } from '@/features/competitions/CompetitionContext';
 import { useTeam } from '@/features/teams/hooks';
+import { positionLabel } from '@/lib/positions';
 import { usePlayer, usePlayerStatistics } from './hooks';
 import styles from './Players.module.css';
 import teamStyles from '@/features/teams/Teams.module.css';
@@ -49,7 +50,7 @@ export function PlayerProfile({ playerId }: { playerId: string }) {
           <h1>{p.fullName}</h1>
           <div className={teamStyles.meta}>
             {p.shirtNumber ? <span>No. {p.shirtNumber}</span> : null}
-            <span>{p.position ?? 'Position not set'}</span>
+            <span>{positionLabel(p.position) ?? 'Position not set'}</span>
             {teamName ? <Link href={`/teams/${p.teamId}`}>{teamName}</Link> : null}
             {p.department ? <span>{p.department}</span> : null}
             <span>Squad status: {p.squadStatus}</span>

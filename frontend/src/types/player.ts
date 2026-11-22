@@ -1,7 +1,8 @@
 import type { Id, ISODate, ISODateTime, Measured } from './common';
 import type { RegistrationStatus } from './team';
+import type { PlayerPosition } from '@/lib/positions';
 
-export type PlayerPosition = 'GK' | 'DF' | 'MF' | 'FW';
+export type { PlayerPosition, PositionCategory } from '@/lib/positions';
 export type SquadStatus = 'registered' | 'approved' | 'suspended' | 'released';
 
 export interface Player {

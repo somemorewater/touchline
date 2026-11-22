@@ -107,7 +107,9 @@ export const players = pgTable('players',{
   ...timestamps
 },t=>[
   index('player_name_idx').on(t.fullName),
-  check('player_position_check', sql`${t.position} is null or ${t.position} in ('GK','DF','MF','FW')`),
+  // Keep legacy DF/MF/FW accepted so existing players remain valid without
+  // inventing a narrower position for them.
+  check('player_position_check', sql`${t.position} is null or ${t.position} in ('GK','CB','LB','RB','DM','CM','RM','LM','AM','LW','RW','CF','SS','DF','MF','FW')`),
 ]);
 export const playerRegistrations = pgTable('player_registrations',{
   id:uuid('id').primaryKey().defaultRandom(),
@@ -133,6 +135,21 @@ export const playerRegistrations = pgTable('player_registrations',{
   unique('player_registration_id_team_uq').on(t.id,t.teamRegistrationId),
   foreignKey({name:'player_registrations_team_season_fk',columns:[t.teamRegistrationId,t.seasonId],foreignColumns:[teamRegistrations.id,teamRegistrations.seasonId]}),
   check('player_registration_shirt_check', sql`${t.shirtNumber} is null or ${t.shirtNumber} between 1 and 99`),
+]);
+export const playerRegistrationEdits = pgTable('player_registration_edits', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  registrationId: uuid('registration_id').notNull().references(() => playerRegistrations.id, { onDelete: 'cascade' }),
+  proposedBy: uuid('proposed_by').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  proposed: jsonb('proposed').$type<Record<string, unknown>>().notNull(),
+  status: varchar('status', { length: 16 }).notNull().default('pending'),
+  reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  reviewNote: text('review_note'),
+  ...timestamps,
+}, t => [
+  uniqueIndex('player_registration_pending_edit_uq').on(t.registrationId).where(sql`${t.status} = 'pending'`),
+  index('player_registration_edit_status_idx').on(t.status, t.createdAt),
+  check('player_registration_edit_status_check', sql`${t.status} in ('pending','approved','rejected','superseded')`),
 ]);
 export const fixtures = pgTable('fixtures',{
   id:uuid('id').primaryKey().defaultRandom(),
@@ -257,7 +274,7 @@ export const lineupPlayers = pgTable('lineup_players',{
   foreignKey({name:'lineup_players_lineup_team_fk',columns:[t.lineupId,t.teamRegistrationId],foreignColumns:[lineups.id,lineups.teamRegistrationId]}),
   foreignKey({name:'lineup_players_player_team_fk',columns:[t.playerRegistrationId,t.teamRegistrationId],foreignColumns:[playerRegistrations.id,playerRegistrations.teamRegistrationId]}),
   check('lineup_player_role_check', sql`${t.role} in ('starter','substitute','unavailable')`),
-  check('lineup_player_position_check', sql`${t.position} is null or ${t.position} in ('GK','DF','MF','FW')`),
+  check('lineup_player_position_check', sql`${t.position} is null or ${t.position} in ('GK','CB','LB','RB','DM','CM','RM','LM','AM','LW','RW','CF','SS','DF','MF','FW')`),
   check('lineup_player_shirt_check', sql`${t.shirtNumber} is null or ${t.shirtNumber} between 1 and 99`),
   check('lineup_player_coordinates_check', sql`((${t.x} is null and ${t.y} is null) or (${t.x} is not null and ${t.y} is not null and ${t.x} between 0 and 100 and ${t.y} between 0 and 100))`),
 ]);

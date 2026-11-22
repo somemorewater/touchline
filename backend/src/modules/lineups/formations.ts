@@ -1,5 +1,6 @@
+import { formationLineForPosition, type AcceptedPlayerPosition } from '../../shared/positions.js';
+
 export type OutfieldPosition = 'DF' | 'MF' | 'FW';
-export type PlayerPosition = 'GK' | OutfieldPosition;
 
 export interface FormationSlot {
   /** Stable slot key within a formation, e.g. `DF1`. */
@@ -116,7 +117,7 @@ export function slotMatches(
 }
 
 export interface PositionedStarter {
-  position: PlayerPosition | null;
+  position: AcceptedPlayerPosition | null;
   x: number | null;
   y: number | null;
 }
@@ -130,8 +131,13 @@ export function validateFormationPositions(
   formation: FormationDefinition,
   starters: readonly PositionedStarter[],
 ): string | null {
-  const outfield = starters.filter((player) => player.position !== 'GK');
-  const goalkeepers = starters.filter((player) => player.position === 'GK');
+  const outfield = starters.filter(
+    (player): player is PositionedStarter & { position: AcceptedPlayerPosition } =>
+      player.position !== null && formationLineForPosition(player.position) !== 'GK',
+  );
+  const goalkeepers = starters.filter(
+    (player) => player.position !== null && formationLineForPosition(player.position) === 'GK',
+  );
   if (goalkeepers.length !== 1) {
     return 'A complete starting XI must contain exactly one goalkeeper.';
   }
@@ -147,7 +153,7 @@ export function validateFormationPositions(
     const slotIndex = formation.slots.findIndex(
       (slot, index) =>
         !used.has(index) &&
-        slot.position === player.position &&
+        slot.position === formationLineForPosition(player.position) &&
         slotMatches(slot, player.x!, player.y!),
     );
     if (slotIndex === -1) {

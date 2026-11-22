@@ -25,15 +25,29 @@ every permission check.
 
 - Node.js 22+
 - pnpm 10+
-- PostgreSQL 16 (or a compatible supported version)
+- Docker Engine with the Docker Compose plugin
 
 ## Local setup
+
+Start PostgreSQL 16. Data is stored in the named `touchline_postgres-data`
+volume and survives container restarts and recreation:
+
+```bash
+docker compose up -d postgres
+docker compose exec postgres pg_isready -U touchline -d touchline
+```
+
+Wait until `pg_isready` reports that the server is accepting connections. The
+Compose defaults are database `touchline`, user `touchline` on
+`localhost:5432`; set `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` in
+a local `.env` to override them. Port `55433` is also published for compatibility
+with existing local `DATABASE_URL` files.
 
 Backend:
 
 ```bash
 cd backend
-cp .env.example .env          # set DATABASE_URL and a private JWT_ACCESS_SECRET (32+ chars)
+cp .env.example .env          # set DATABASE_URL to match Compose and set a private JWT_ACCESS_SECRET (32+ chars)
 pnpm install
 pnpm db:migrate
 pnpm db:seed
@@ -51,6 +65,18 @@ pnpm dev                      # http://localhost:3000
 
 The frontend defaults to `http://localhost:4000/api/v1` and
 `ws://localhost:4000`. `CORS_ORIGINS` must include the frontend origin.
+
+### Local PostgreSQL lifecycle
+
+```bash
+docker compose stop postgres   # stop PostgreSQL; data is kept
+docker compose down            # remove containers and network; named volumes are kept
+docker compose down -v         # WARNING: permanently deletes the local database volume
+```
+
+`docker compose down -v` and `docker volume rm touchline_postgres-data` both
+permanently delete local database data; `down -v` also removes pgAdmin state.
+Use them only when you intend to start from an empty database.
 
 Database migrations are committed under `backend/drizzle/`. Use
 `pnpm db:generate` after a schema change, review the generated SQL and commit it

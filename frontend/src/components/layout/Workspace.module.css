@@ -13,6 +13,13 @@
 
 .form { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--glass-edge); border-radius: var(--radius-md); background: var(--glass); }
 .formGrid { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
+.playerDialog { width: min(720px, calc(100vw - 24px)); max-width: none; max-height: min(90dvh, 900px); padding: 0; overflow: auto; color: var(--ink); background: var(--surface); border: 1px solid var(--glass-edge); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); }
+.playerDialog::backdrop { background: rgba(8, 18, 28, .62); backdrop-filter: blur(2px); }
+.playerDialogForm { display: flex; flex-direction: column; gap: var(--space-3); padding: clamp(16px, 4vw, 28px); }
+.playerDialogHead { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.playerDialogHead h2 { font-size: var(--text-xl); }
+.playerDialogActions { display: flex; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; padding-top: var(--space-2); border-top: 1px solid var(--glass-edge); }
+@media (max-width: 480px) { .playerDialogActions > * { flex: 1 1 100%; } }
 
 .statusGrid { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
 .metric { padding: var(--space-3); border: 1px solid var(--glass-edge); border-radius: var(--radius-md); background: var(--glass); display: grid; gap: 2px; }

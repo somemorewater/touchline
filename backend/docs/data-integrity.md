@@ -41,7 +41,7 @@ Phase 3 makes PostgreSQL enforce the invariants that future domain workflows dep
 | One active holder per matriculation number per season | `player_matriculation_active_season_uq` partial unique |
 | No duplicate player row for a team entry | `player_team_reg_uq` |
 | Shirt numbers unique within a team entry | `shirt_number_team_uq` |
-| Shirt numbers `1..99`, positions `GK/DF/MF/FW` | `player_registration_shirt_check`, `player_position_check` |
+| Shirt numbers `1..99`, detailed positions plus legacy `DF/MF/FW` | `player_registration_shirt_check`, `player_position_check` |
 
 Active statuses are `submitted`, `under_review` and `approved`. `draft`, `rejected` and `withdrawn` are historical and intentionally unconstrained, so a player can be rejected, re-reviewed, transferred or withdrawn without deleting history.
 
@@ -211,7 +211,7 @@ These rules are not enforced because the product has not defined them. Enforcing
 7. **Match-event corrections.** Events are append-only by default, but the void/correction markers now exist. **Resolved for Phase 5:** corrections update the row and preserve the previous values in `audit_logs`; voids set `voided_at` and keep the row. Voided events are excluded from the score, never deleted.
 8. **Clock semantics.** Minute bounds are sanity limits, not period rules. **Resolved for Phase 5:** the match engine enforces the period state machine and accepts explicit minute/added-time updates; it floors the clock at period boundaries but never derives it from wall-clock time.
 9. **Case-normalized emails.** The unique index prevents new case-variant duplicates but does not rewrite legacy uppercase emails. Normalization needs a dedicated migration decision.
-10. **Substitute limit.** No Phase 3 rule defines squad size. **Resolved for Phase 6:** `competition_rules.rules.maxSubstitutes` when it is a non-negative integer (capped at 30), otherwise a documented default of 12.
+10. **Substitute limit.** Lineups allow 0–11 substitutes. `competition_rules.rules.maxSubstitutes` may define a lower non-negative season limit; larger values are capped at 11. Missing or malformed settings use 11.
 11. **Unavailable players and appearance data.** `lineup_players.role` still accepts `unavailable` at the database level, but the lineup API only writes `starter`/`substitute`. Unused substitutes have no appearance, and minutes played/assists are omitted because the event model cannot derive them reliably.
 
 ## Known limitations

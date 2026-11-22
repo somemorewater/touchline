@@ -4,6 +4,7 @@ import {
   auditLogs,
   competitions,
   players,
+  playerRegistrationEdits,
   playerRegistrations,
   seasons,
   teamRegistrations,
@@ -27,6 +28,8 @@ import type {
   playerRegistrationRejectSchema,
   playerRegistrationReviewSchema,
   playerRegistrationSubmitSchema,
+  playerRegistrationEditSchema,
+  playerRegistrationEditReviewSchema,
 } from './schemas.js';
 import type { z } from 'zod';
 
@@ -34,6 +37,8 @@ type SubmitInput = z.infer<typeof playerRegistrationSubmitSchema>;
 type ListQuery = z.infer<typeof playerRegistrationListQuerySchema>;
 type ReviewInput = z.infer<typeof playerRegistrationReviewSchema>;
 type RejectInput = z.infer<typeof playerRegistrationRejectSchema>;
+type EditInput = z.infer<typeof playerRegistrationEditSchema>;
+type EditReviewInput = z.infer<typeof playerRegistrationEditReviewSchema>;
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const ACTIVE_STATUSES = ['submitted', 'under_review', 'approved'] as const;
@@ -209,6 +214,7 @@ async function registrationDetail(
   registrationId: string,
 ) {
   const scope = await loadRegistrationScope(registrationId, executor);
+  const [pendingEdit] = await executor.select().from(playerRegistrationEdits).where(and(eq(playerRegistrationEdits.registrationId, registrationId), eq(playerRegistrationEdits.status, 'pending'))).limit(1);
   return {
     ...scope.registration,
     player: scope.player,
@@ -216,6 +222,7 @@ async function registrationDetail(
     teamRegistration: scope.entry,
     season: scope.season,
     competition: scope.competition,
+    pendingEdit: pendingEdit ?? null,
   };
 }
 
@@ -481,14 +488,15 @@ export async function listPlayerRegistrations(
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(playerRegistrations.createdAt));
 
-  return rows.map((row) => ({
+  return Promise.all(rows.map(async row => ({
     ...row.registration,
     player: row.player,
     team: row.team,
     teamRegistration: row.entry,
     season: row.season,
     competition: row.competition,
-  }));
+    pendingEdit: (await db.select().from(playerRegistrationEdits).where(and(eq(playerRegistrationEdits.registrationId, row.registration.id), eq(playerRegistrationEdits.status, 'pending'))).limit(1))[0] ?? null,
+  })));
 }
 
 export async function getPlayerRegistration(
@@ -755,6 +763,55 @@ export async function withdrawPlayerRegistration(
       'Withdrawn by the team captain.',
     );
     return registrationDetail(tx, registrationId);
+  });
+}
+
+export async function proposePlayerRegistrationEdit(auth: AuthContext, registrationId: string, input: EditInput) {
+  const scope = await loadRegistrationScope(registrationId);
+  if (scope.entry.captainUserId !== auth.userId) throw forbidden('Only the assigned captain can propose registration edits.');
+  if (scope.registration.status !== 'approved' || !scope.registration.eligibilityApproved) {
+    throw conflict('Only an approved registration can receive a proposed edit.');
+  }
+  const proposed: Record<string, unknown> = {};
+  if (input.player) proposed.player = input.player;
+  if (input.matriculationNumber !== undefined) proposed.matriculationNumber = input.matriculationNumber;
+  if (input.shirtNumber !== undefined) proposed.shirtNumber = input.shirtNumber;
+  return db.transaction(async tx => {
+    const [current] = await tx.select().from(playerRegistrations).where(eq(playerRegistrations.id, registrationId)).for('update');
+    if (!current || current.status !== 'approved') throw conflict('Registration is no longer approved.');
+    const [pending] = await tx.select({ id: playerRegistrationEdits.id }).from(playerRegistrationEdits).where(and(eq(playerRegistrationEdits.registrationId, registrationId), eq(playerRegistrationEdits.status, 'pending'))).limit(1);
+    if (pending) throw conflict('A registration edit is already awaiting review.');
+    const [edit] = await tx.insert(playerRegistrationEdits).values({ registrationId, proposedBy: auth.userId, proposed }).returning();
+    await writeAudit(tx, auth.userId, 'player_registration.edit_submitted', registrationId, current, { editId: edit!.id, proposed });
+    return { registration: await registrationDetail(tx, registrationId), pendingEdit: edit };
+  });
+}
+
+export async function reviewPlayerRegistrationEdit(auth: AuthContext, registrationId: string, editId: string, input: EditReviewInput) {
+  const scope = await loadRegistrationScope(registrationId);
+  if (!canReviewRegistrationsIn(auth, scope.competition.id) || scope.entry.captainUserId === auth.userId) {
+    throw forbidden('Registration edit review requires authorized administrative scope.');
+  }
+  return db.transaction(async tx => {
+    const [edit] = await tx.select().from(playerRegistrationEdits).where(and(eq(playerRegistrationEdits.id, editId), eq(playerRegistrationEdits.registrationId, registrationId))).for('update');
+    if (!edit || edit.status !== 'pending') throw notFound('Pending registration edit not found.');
+    const [current] = await tx.select().from(playerRegistrations).where(eq(playerRegistrations.id, registrationId)).for('update');
+    if (!current || current.status !== 'approved') throw conflict('The registration must remain approved while edits are reviewed.');
+    if (input.decision === 'approve') {
+      const proposed = edit.proposed as { player?: Record<string, unknown>; matriculationNumber?: string | null; shirtNumber?: number | null };
+      const playerPatch = (proposed.player ?? {}) as Partial<typeof players.$inferInsert>;
+      const regPatch = { ...(proposed.matriculationNumber !== undefined ? { matriculationNumber: proposed.matriculationNumber } : {}), ...(proposed.shirtNumber !== undefined ? { shirtNumber: proposed.shirtNumber } : {}) };
+      if (regPatch.matriculationNumber !== undefined) await assertMatriculationAvailable(tx, current.seasonId, regPatch.matriculationNumber, current.id);
+      if (regPatch.shirtNumber !== undefined) await assertShirtNumberAvailable(tx, current.teamRegistrationId, regPatch.shirtNumber, current.id);
+      const [updatedPlayer] = Object.keys(playerPatch).length ? await tx.update(players).set({ ...playerPatch, updatedAt: new Date() }).where(eq(players.id, current.playerId)).returning() : [null];
+      const [updatedReg] = Object.keys(regPatch).length ? await tx.update(playerRegistrations).set({ ...regPatch, updatedAt: new Date() }).where(eq(playerRegistrations.id, registrationId)).returning() : [current];
+      const [updatedEdit] = await tx.update(playerRegistrationEdits).set({ status: 'approved', reviewedBy: auth.userId, reviewedAt: new Date(), reviewNote: input.reviewNote ?? null, updatedAt: new Date() }).where(eq(playerRegistrationEdits.id, editId)).returning();
+      await writeAudit(tx, auth.userId, 'player_registration.edit_approved', registrationId, { registration: current, player: scope.player, edit }, { registration: updatedReg, player: updatedPlayer ?? scope.player, edit: updatedEdit }, input.reviewNote);
+    } else {
+      const [updatedEdit] = await tx.update(playerRegistrationEdits).set({ status: 'rejected', reviewedBy: auth.userId, reviewedAt: new Date(), reviewNote: input.reviewNote ?? 'Proposed changes rejected.', updatedAt: new Date() }).where(eq(playerRegistrationEdits.id, editId)).returning();
+      await writeAudit(tx, auth.userId, 'player_registration.edit_rejected', registrationId, edit, updatedEdit, input.reviewNote);
+    }
+    return { registration: await registrationDetail(tx, registrationId), edit: (await tx.select().from(playerRegistrationEdits).where(eq(playerRegistrationEdits.id, editId)))[0] };
   });
 }
 

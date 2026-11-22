@@ -13,6 +13,7 @@ import {
 } from '@/lib/api/endpoints';
 import type { GroupDto, PlayerRegistrationDto, PlayerRegistrationHistoryDto, TeamListEntryDto } from '@/lib/api/types';
 import { formatDateTime } from '@/lib/format';
+import { positionLabel } from '@/lib/positions';
 import { DISPLAY_TIME_ZONE } from '@/types';
 import { AdminSection, Feedback, Field, statusLabel, useAdminAction } from './ui';
 import styles from './Admin.module.css';
@@ -588,17 +589,34 @@ function RegistrationRow({
     });
   };
 
+  const reviewEdit = (decision: 'approve' | 'reject') => {
+    if (!registration.pendingEdit) return;
+    void run(`registration-edit:${registration.id}:${decision}`, async () => {
+      const note = decision === 'reject' ? window.prompt('Reason for rejecting these changes') : window.prompt('Optional review note');
+      if (decision === 'reject' && !note?.trim()) return 'A rejection reason is required.';
+      await registrationsApi.reviewEdit(registration.id, registration.pendingEdit!.id, decision, note?.trim() || null);
+      onChanged();
+      return `Player changes ${decision === 'approve' ? 'approved' : 'rejected'}.`;
+    });
+  };
+
   return (
     <>
       <tr>
         <th scope="row">{registration.player.fullName}</th>
         <td>{registration.team.name}</td>
-        <td>{registration.player.position ?? 'Not recorded'}</td>
+        <td>{positionLabel(registration.player.position) ?? 'Not recorded'}</td>
         <td className="num">{registration.shirtNumber ?? '—'}</td>
         <td><span className="tl-badge">{statusLabel(registration.status)}</span></td>
         <td>{registration.reviewNote ?? '—'}</td>
         <td>
           <div className={styles.rowActions}>
+            {registration.pendingEdit && canReview ? <>
+              <span className="tl-badge">Changes pending</span>
+              <details><summary>View proposed changes</summary><pre className={styles.pre}>{JSON.stringify(registration.pendingEdit.proposed, null, 2)}</pre></details>
+              <button type="button" className="tl-btn tl-btn-sm" disabled={pending !== null} onClick={() => reviewEdit('approve')}>Approve changes</button>
+              <button type="button" className="tl-btn tl-btn-sm tl-btn-danger" disabled={pending !== null} onClick={() => reviewEdit('reject')}>Reject changes</button>
+            </> : null}
             {reviewable ? (
               <button type="button" className="tl-btn tl-btn-sm" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
                 <ClipboardList size={13} aria-hidden /> Review

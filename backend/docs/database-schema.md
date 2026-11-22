@@ -39,7 +39,7 @@ All identity, competition/season/group, team/captain, player-registration, fixtu
   - `player_matriculation_active_season_uq` — one active holder of a matriculation number per season.
   - `draft`, `rejected` and `withdrawn` rows remain historical and may repeat, so transfers and resubmissions stay possible.
 - `player_team_reg_uq` prevents the same player appearing twice for one team entry, and `shirt_number_team_uq` prevents duplicate shirt numbers within a team entry while allowing `NULL`.
-- Shirt numbers are `1..99`; player positions are `GK`, `DF`, `MF` or `FW`.
+- Shirt numbers are `1..99`; player positions are the detailed roles `GK`, `CB`, `LB`, `RB`, `DM`, `CM`, `RM`, `LM`, `AM`, `LW`, `RW` or `CF`. Legacy `DF`, `MF` and `FW` values remain valid for existing records.
 
 ## Fixtures and matches
 

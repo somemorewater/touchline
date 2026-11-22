@@ -1,4 +1,5 @@
 import { downloadAuthenticated, request, requestWithMeta, uploadBinary, type Query } from './client';
+import type { PlayerPosition } from '@/lib/positions';
 import type {
   AdminAccountDto,
   AdministrationOverviewDto,
@@ -238,7 +239,7 @@ export const registrationsApi = {
       fullName: string;
       department?: string | null;
       dateOfBirth?: string | null;
-      position?: 'GK' | 'DF' | 'MF' | 'FW' | null;
+      position?: PlayerPosition | null;
       preferredFoot?: 'left' | 'right' | 'both' | null;
       contactEmail?: string | null;
     };
@@ -246,6 +247,12 @@ export const registrationsApi = {
     shirtNumber?: number | null;
   }) {
     return request<PlayerRegistrationDto>('/player-registrations', { method: 'POST', body: input });
+  },
+  proposeEdit(id: string, input: { player?: { fullName?: string; department?: string | null; dateOfBirth?: string | null; position?: PlayerPosition | null; preferredFoot?: 'left' | 'right' | 'both' | null; contactEmail?: string | null }; matriculationNumber?: string | null; shirtNumber?: number | null }) {
+    return request<{ registration: PlayerRegistrationDto; pendingEdit: { id: string; proposed: Record<string, unknown>; status: string } }>(`/player-registrations/${id}`, { method: 'PATCH', body: input });
+  },
+  reviewEdit(id: string, editId: string, decision: 'approve' | 'reject', reviewNote?: string | null) {
+    return request<unknown>(`/player-registrations/${id}/edits/${editId}/review`, { method: 'POST', body: { decision, reviewNote } });
   },
   review(id: string, reviewNote?: string | null) {
     return request<PlayerRegistrationDto>(`/player-registrations/${id}/review`, {
@@ -487,7 +494,7 @@ export const lineupsApi = {
     return request<LineupDto>(`/lineups/${id}/return`, { method: 'POST', body: { reason } });
   },
   withdraw(id: string) {
-    return request<LineupDto>(`/lineups/${id}/withdraw`, { method: 'POST' });
+    return request<LineupDto>(`/lineups/${id}/withdraw`, { method: 'POST', body: {} });
   },
   teamHistory(teamRegistrationId: string) {
     return request<Paginated<LineupDto>>(`/team-entries/${teamRegistrationId}/lineups`);
@@ -498,7 +505,7 @@ export const lineupsApi = {
 export interface LineupPlayerInput {
   playerRegistrationId: string;
   role: 'starter' | 'substitute';
-  position: 'GK' | 'DF' | 'MF' | 'FW';
+  position: PlayerPosition;
   shirtNumber: number;
   x?: number | null;
   y?: number | null;
