@@ -163,12 +163,14 @@ export async function lineupRoutes(app: FastifyInstance) {
         ...secure,
         summary: 'Submit a complete lineup for review',
         ...idParamsSchema,
-        body: jsonSchema(lineupReviewSchema),
         response: { ...successResponse(), ...errorResponse },
       },
     },
     async (req, reply) => {
       const { id } = req.params as { id: string };
+      // Submission has no required request body. Keep runtime validation for
+      // an optional reason here; Fastify's body schema rejects an absent body
+      // before this intentional empty-object default can be applied.
       const input = lineupReviewSchema.parse(req.body ?? {});
       return ok(reply, await submitLineup(req.auth!, id, input.reason));
     },

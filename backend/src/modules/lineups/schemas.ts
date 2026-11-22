@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { uuidSchema } from '../../shared/schema.js';
-import { acceptedPlayerPositionCodes } from '../../shared/positions.js';
+import { acceptedPlayerPositionCodes, playerPositionCodes } from '../../shared/positions.js';
 
 export const lineupRoles = ['starter', 'substitute'] as const;
 export const lineupPositions = acceptedPlayerPositionCodes;
@@ -35,10 +35,19 @@ export const lineupPlayerInputSchema = z
   );
 
 const lineupPlayersSchema = z.array(lineupPlayerInputSchema).max(40).superRefine((players, ctx) => {
-  const substitutes = players.filter((player) => player.role === 'substitute').length;
-  if (substitutes > MAX_LINEUP_SUBSTITUTES) {
+  const substitutes = players.filter((player) => player.role === 'substitute');
+  if (substitutes.length > MAX_LINEUP_SUBSTITUTES) {
     ctx.addIssue({ code: 'custom', message: `A lineup can contain at most ${MAX_LINEUP_SUBSTITUTES} substitutes.`, path: [] });
   }
+  players.forEach((player, index) => {
+    if (player.role === 'substitute' && !playerPositionCodes.includes(player.position as (typeof playerPositionCodes)[number])) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Each substitute needs one of the supported tactical positions.',
+        path: [index, 'position'],
+      });
+    }
+  });
 });
 
 const formation = z

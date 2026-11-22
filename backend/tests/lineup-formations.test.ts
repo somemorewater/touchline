@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { getFormation, validateFormationPositions } from '../src/modules/lineups/formations.js';
-import { lineupCreateSchema, lineupPositions, MAX_LINEUP_SUBSTITUTES } from '../src/modules/lineups/schemas.js';
+import { lineupCreateSchema, lineupPositions, lineupReviewSchema, MAX_LINEUP_SUBSTITUTES } from '../src/modules/lineups/schemas.js';
 
 describe('detailed tactical lineup positions', () => {
+  it('accepts the submission contract with no body fields and validates optional reason objects', () => {
+    expect(lineupReviewSchema.safeParse({}).success).toBe(true);
+    expect(lineupReviewSchema.safeParse({ reason: 'Updated roster' }).success).toBe(true);
+    expect(lineupReviewSchema.safeParse({ request: {} }).success).toBe(false);
+  });
+
   it('accepts exact tactical positions that fit the selected formation lines', () => {
     const formation = getFormation('4-3-3');
     expect(formation).not.toBeNull();
@@ -55,5 +61,22 @@ describe('detailed tactical lineup positions', () => {
     expect(make(0).success).toBe(true);
     expect(make(11).success).toBe(true);
     expect(make(12).success).toBe(false);
+    expect(lineupCreateSchema.safeParse({
+      teamRegistrationId: '00000000-0000-4000-8000-000000000001',
+      players: [{
+        playerRegistrationId: '00000000-0000-4000-8000-000000000002',
+        role: 'substitute',
+        shirtNumber: 1,
+      }],
+    }).success).toBe(false);
+    expect(lineupCreateSchema.safeParse({
+      teamRegistrationId: '00000000-0000-4000-8000-000000000001',
+      players: [{
+        playerRegistrationId: '00000000-0000-4000-8000-000000000002',
+        role: 'substitute',
+        position: 'FW',
+        shirtNumber: 1,
+      }],
+    }).success).toBe(false);
   });
 });

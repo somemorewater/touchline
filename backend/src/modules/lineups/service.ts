@@ -38,6 +38,7 @@ import {
   sanitizeLineup,
 } from './visibility.js';
 import { MAX_LINEUP_SUBSTITUTES, type LineupListQuery, type LineupPlayerInput } from './schemas.js';
+import { playerPositionCodes } from '../../shared/positions.js';
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = Transaction | typeof db;
@@ -242,6 +243,10 @@ async function validateLineupSelection(
 
   const starters = inputs.filter((player) => player.role === 'starter');
   const substitutes = inputs.filter((player) => player.role === 'substitute');
+
+  if (substitutes.some((player) => !playerPositionCodes.includes(player.position as (typeof playerPositionCodes)[number]))) {
+    throw badRequest('Every selected substitute needs a supported tactical position.');
+  }
 
   const limit = await maxSubstitutesForSeason(executor, scope.seasonId);
   if (substitutes.length > limit) {

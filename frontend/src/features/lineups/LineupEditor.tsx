@@ -273,16 +273,19 @@ export function LineupEditor({ matchId, teamRegistrationId, teamName, competitio
       const registration = byRegistration.get(player.playerRegistrationId);
       nextSubs[player.playerRegistrationId] = {
         shirtNumber: player.shirtNumber ?? shirtFor(registration, null),
-        position: isDetailedPosition(player.position)
-          ? player.position as Position
-          : isDetailedPosition(registration?.player.position)
-            ? registration!.player.position as Position
-            : '',
+        // Only a saved lineup position is an existing tactical assignment.
+        // A registered/preferred position must not silently replace a missing
+        // saved assignment when editing an existing lineup.
+        position: isDetailedPosition(player.position) ? player.position as Position : '',
       };
     }
     setSubs(nextSubs);
-  }, [existing, formations, byRegistration, squad, squadQ.isLoading, formationsQ.isLoading, historyQ.isLoading, historyQ.data]);
+  }, [existing, formations, byRegistration, squad, squadQ.isLoading, formationsQ.isLoading, historyQ.isLoading, historyQ.isError, historyQ.data]);
 
+  const startingIds = useMemo(
+    () => new Set(Object.values(slots).map((slot) => slot.playerRegistrationId)),
+    [slots],
+  );
   const assignedIds = useMemo(
     () => new Set([
       ...Object.values(slots).map((slot) => slot.playerRegistrationId),
@@ -296,7 +299,8 @@ export function LineupEditor({ matchId, teamRegistrationId, teamName, competitio
     return squad.filter((entry) => entry.id === currentId || !assignedIds.has(entry.id));
   };
 
-  const unassigned = squad.filter((entry) => !assignedIds.has(entry.id));
+  // Selected substitutes remain visible so their position controls stay editable.
+  const substituteCandidates = squad.filter((entry) => !startingIds.has(entry.id));
   const filledSlots = slotDefs
     .map((_slot, index) => slots[index])
     .filter((assignment): assignment is Assignment => Boolean(assignment));
@@ -400,7 +404,6 @@ export function LineupEditor({ matchId, teamRegistrationId, teamName, competitio
     });
 
     const substitutes: LineupPlayerInput[] = Object.entries(subs).map(([playerRegistrationId, selection]) => {
-      const registration = byRegistration.get(playerRegistrationId);
       const position = selection.position as Position;
       return {
         playerRegistrationId,
@@ -438,11 +441,12 @@ export function LineupEditor({ matchId, teamRegistrationId, teamName, competitio
     if (Object.entries(slots).some(([index, assignment]) => !assignment.position || positionCategory(assignment.position) !== slotDefs[Number(index)]?.line)) {
       return 'Choose a tactical position that fits each starting slot.';
     }
-    if (Object.values(subs).some((selection) => !selection.position)) {
-      return 'Choose a tactical position for each substitute.';
-    }
     return null;
   };
+
+  const hasUnassignedSubstitutePosition = Object.values(subs).some(
+    (selection) => !isDetailedPosition(selection.position),
+  );
 
   const refresh = async () => {
     await Promise.all([
@@ -490,6 +494,7 @@ export function LineupEditor({ matchId, teamRegistrationId, teamName, competitio
   };
 
   const saveDraft = () => run('save', async () => {
+    if (hasUnassignedSubstitutePosition) return;
     const issue = validate(false);
     if (issue) throw new Error(issue);
     if (canReview && current && current.status !== 'draft' && current.status !== 'returned' && !reason.trim()) {
@@ -501,6 +506,7 @@ export function LineupEditor({ matchId, teamRegistrationId, teamName, competitio
   });
 
   const submit = () => run('submit', async () => {
+    if (hasUnassignedSubstitutePosition) return;
     const issue = validate(true);
     if (issue) throw new Error(issue);
     const saved = await persist();
@@ -726,11 +732,11 @@ export function LineupEditor({ matchId, teamRegistrationId, teamName, competitio
 
           <div className="tl-card">
             <h4>Substitutes ({Object.keys(subs).length}/{MAX_SUBSTITUTES})</h4>
-            {unassigned.length === 0 ? (
+            {substituteCandidates.length === 0 ? (
               <p className="tl-muted">Every available player is already in the starting XI or on the bench.</p>
             ) : (
               <ul className={styles.squadList}>
-                {unassigned.map((entry) => {
+                {substituteCandidates.map((entry) => {
                   const checked = entry.id in subs;
                   return (
                     <li key={entry.id} className={styles.squadRow}>
@@ -755,6 +761,8 @@ export function LineupEditor({ matchId, teamRegistrationId, teamName, competitio
                               <select
                                   className="tl-select"
                                   aria-label={`${entry.player.fullName} substitute position`}
+                                  aria-invalid={!isDetailedPosition(subs[entry.id]!.position)}
+                                  aria-describedby={!isDetailedPosition(subs[entry.id]!.position) ? `sub-position-error-${entry.id}` : undefined}
                                   value={subs[entry.id]!.position}
                                   onChange={(event) => setSubs((previous) => ({
                                     ...previous,
@@ -762,9 +770,15 @@ export function LineupEditor({ matchId, teamRegistrationId, teamName, competitio
                                   }))}
                                   disabled={!editable || busy !== null}
                                 >
-                                  <option value="">Use player profile</option>
+                                  <option value="">Choose tactical position</option>
                                   {POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}
                               </select>
+                              <span className="tl-muted">Tactical: {positionLabel(subs[entry.id]!.position) ?? 'position required'}</span>
+                              {!isDetailedPosition(subs[entry.id]!.position) ? (
+                                <small id={`sub-position-error-${entry.id}`} className={styles.subPositionError} role="alert">
+                                  Choose a tactical position for {entry.player.fullName}.
+                                </small>
+                              ) : null}
                               {!entry.shirtNumber ? (
                                 <input
                                   className={`tl-input ${styles.shirtInput}`}

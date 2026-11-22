@@ -34,7 +34,7 @@ Canonical path: `draft → submitted → confirmed`, with `returned` reachable f
 | GET | `/api/v1/matches/:id/lineups` | lineup readers (both teams) |
 | GET | `/api/v1/lineups/:id` | lineup readers |
 | PATCH | `/api/v1/lineups/:id` | captain before kickoff, or competition administrator |
-| POST | `/api/v1/lineups/:id/submit` | captain, or competition administrator |
+| POST | `/api/v1/lineups/:id/submit` | captain, or competition administrator; no body required (`reason` may be supplied as an object field) |
 | POST | `/api/v1/lineups/:id/confirm` | competition administrator only |
 | POST | `/api/v1/lineups/:id/return` | competition administrator only; `reason` required |
 | POST | `/api/v1/lineups/:id/withdraw` | captain, or competition administrator |
@@ -127,7 +127,7 @@ A correction does not silently rewrite history: the audit row keeps the previous
 
 ## Review actions
 
-- **Submit** (`draft`/`returned → submitted`) revalidates the complete XI and eligibility, sets `submitted_at`, and audits `lineup.submitted`.
+- **Submit** (`draft`/`returned → submitted`) accepts no body (or an optional `{ "reason": "..." }` object), revalidates the persisted complete XI and eligibility, sets `submitted_at`, and audits `lineup.submitted`.
 - **Confirm** (`submitted`/`published → confirmed`) revalidates the complete XI and eligibility, stamps `confirmed_at`/`confirmed_by`, clears return metadata, audits `lineup.confirmed`, and broadcasts `lineup.update` after commit.
 - **Return** (`submitted`/`confirmed → returned`) requires a reason, stamps `returned_at`/`returned_by`/`return_reason`, clears confirmation metadata, and audits `lineup.returned`.
 - **Withdraw** (any non-draft → `draft`) clears submission, confirmation and return metadata and audits `lineup.withdrawn`. A withdrawal is not a deletion; the audit history remains.

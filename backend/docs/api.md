@@ -141,7 +141,7 @@ OpenAPI UI is `/docs`. Path parameters shown as `:id` must be UUIDs; otherwise t
 | POST | `/api/v1/matches/:id/lineups` | captain / scoped admin | Creates a `draft`; incomplete drafts allowed |
 | GET | `/api/v1/lineups/:id` | public, optionally private | Same status-aware visibility as the match list |
 | PATCH | `/api/v1/lineups/:id` | captain before kickoff / scoped admin | Admin corrections after kickoff/confirmation require `reason` |
-| POST | `/api/v1/lineups/:id/submit` | captain / scoped admin | Revalidates a complete XI and eligibility |
+| POST | `/api/v1/lineups/:id/submit` | captain / scoped admin | No body required; optional `reason`; revalidates the persisted complete XI and eligibility |
 | POST | `/api/v1/lineups/:id/confirm` | `matches.manage`/`fixtures.manage` | Revalidates and broadcasts post-commit |
 | POST | `/api/v1/lineups/:id/return` | same | Requires `reason`; clears confirmation |
 | POST | `/api/v1/lineups/:id/withdraw` | captain / scoped admin | Returns the lineup to `draft`; audited |
