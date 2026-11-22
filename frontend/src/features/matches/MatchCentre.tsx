@@ -71,7 +71,9 @@ export function MatchCentre({ matchId }: { matchId: string }) {
   const lineupEmptyTitle = noLineupStatus ? `Match ${statusLabel(effectiveStatus).toLowerCase()}` : 'Lineups not published';
   const lineupEmptyBody = noLineupStatus
     ? `This match is marked ${statusLabel(effectiveStatus).toLowerCase()} and no lineup has been recorded for it.`
-    : 'Each captain submits a matchday squad before kick-off. It will be shown here once submitted.';
+    : match.kickoffAt && Date.now() < Date.parse(match.kickoffAt) - 60 * 60 * 1000
+      ? `Lineups will be available 1 hour before kickoff (${formatDateTime(new Date(Date.parse(match.kickoffAt) - 60 * 60 * 1000).toISOString(), tz)}).`
+      : 'No eligible lineup has been published yet.';
 
   const eventList = (reverse: boolean) => (
     <ol className={styles.events}>

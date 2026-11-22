@@ -15,10 +15,37 @@ export interface LineupVisibility {
   all: boolean;
   /** Team entries the caller captains. */
   ownedTeamIds: string[];
-  /** Match is public, so confirmed/published lineups are public. */
+  /** Match is public, so published lineups become public at their availability time. */
   publicMatch: boolean;
   /** May confirm, return or administratively correct lineups. */
   reviewer: boolean;
+}
+
+const LINEUP_PUBLIC_LEAD_MS = 60 * 60 * 1000;
+
+export function lineupPublicAvailabilityAt(scope: MatchScope): Date | null {
+  return scope.fixtureScheduledAt
+    ? new Date(scope.fixtureScheduledAt.getTime() - LINEUP_PUBLIC_LEAD_MS)
+    : null;
+}
+
+export function isLineupPubliclyAvailable(
+  visibility: LineupVisibility,
+  scope: MatchScope,
+  lineup: { status: string; publishedAt: Date | null },
+  now = new Date(),
+): boolean {
+  const availableAt = lineupPublicAvailabilityAt(scope);
+  return Boolean(
+    visibility.publicMatch &&
+    lineup.status === 'published' &&
+    lineup.publishedAt &&
+    lineup.publishedAt.getTime() <= now.getTime() &&
+    availableAt &&
+    availableAt.getTime() <= now.getTime() &&
+    !['postponed', 'cancelled', 'abandoned'].includes(scope.fixtureStatus) &&
+    !['postponed', 'cancelled', 'abandoned'].includes(scope.matchStatus),
+  );
 }
 
 export async function resolveLineupVisibility(
@@ -52,12 +79,13 @@ export async function resolveLineupVisibility(
 
 export function canSeeLineup(
   visibility: LineupVisibility,
-  lineup: { teamRegistrationId: string; status: string },
+  lineup: { teamRegistrationId: string; status: string; publishedAt: Date | null },
+  scope: MatchScope,
+  now = new Date(),
 ): boolean {
   if (visibility.all) return true;
   if (
-    visibility.publicMatch &&
-    (lineup.status === 'confirmed' || lineup.status === 'published')
+    isLineupPubliclyAvailable(visibility, scope, lineup, now)
   ) {
     return true;
   }
@@ -78,6 +106,8 @@ export function sanitizeLineup(
     status: lineup.status,
     submittedAt: lineup.submittedAt,
     confirmedAt: lineup.confirmedAt,
+    publishedAt: lineup.publishedAt,
+    publishedBy: includeReview ? lineup.publishedBy : null,
     returnedAt: includeReview ? lineup.returnedAt : null,
     returnReason: includeReview ? lineup.returnReason : null,
     createdAt: lineup.createdAt,
@@ -105,7 +135,7 @@ export async function loadVisibleMatchLineups(
     .from(lineups)
     .where(eq(lineups.matchId, scope.matchId))
     .orderBy(lineups.createdAt);
-  const visible = rows.filter((lineup) => canSeeLineup(resolved, lineup));
+  const visible = rows.filter((lineup) => canSeeLineup(resolved, lineup, scope));
   return Promise.all(
     visible.map(async (lineup) => {
       const players = await db

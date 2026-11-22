@@ -241,6 +241,8 @@ export const lineups = pgTable('lineups',{
   submittedAt:timestamp('submitted_at',{withTimezone:true}),
   confirmedAt:timestamp('confirmed_at',{withTimezone:true}),
   confirmedBy:uuid('confirmed_by').references(()=>users.id,{onDelete:'set null'}),
+  publishedAt:timestamp('published_at',{withTimezone:true}),
+  publishedBy:uuid('published_by').references(()=>users.id,{onDelete:'set null'}),
   returnedAt:timestamp('returned_at',{withTimezone:true}),
   returnedBy:uuid('returned_by').references(()=>users.id,{onDelete:'set null'}),
   returnReason:text('return_reason'),
@@ -251,6 +253,7 @@ export const lineups = pgTable('lineups',{
   unique('lineup_id_team_uq').on(t.id,t.teamRegistrationId),
   index('lineup_team_idx').on(t.teamRegistrationId),
   index('lineup_match_status_idx').on(t.matchId,t.status),
+  index('lineup_publication_idx').on(t.status,t.publishedAt),
   check('lineup_status_check', sql`${t.status} in ('draft','submitted','published','confirmed','returned')`),
   check('lineup_formation_check', sql`${t.formation} is null or case when ${t.formation} ~ '^[1-9][0-9]*(-[1-9][0-9]*)+$' then touchline_formation_outfield_count(${t.formation}) = 10 else false end`),
 ]);

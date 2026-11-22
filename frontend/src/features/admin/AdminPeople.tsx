@@ -35,38 +35,39 @@ const ROLES = [
 const SCOPED_ROLES = new Set(['team_captain', 'match_official', 'competition_admin']);
 const AUDIENCES: AnnouncementAudience[] = ['public', 'participants', 'captains', 'officials', 'administrators'];
 
-export function AdminPeople() {
+export function AdminPeople({ section = 'all' }: { section?: 'users' | 'announcements' | 'audit' | 'all' }) {
   const { competition } = useActiveCompetition();
   const { can, canIn, isSuperAdmin } = useAuth();
   const competitionId = competition?.id;
   const canHere = (permission: string) =>
     can(permission) || (competitionId ? canIn(permission, competitionId) : false);
 
+  const titles = { users: 'User management', announcements: 'Announcements', audit: 'Audit logs', all: 'Users, announcements and audit' };
   return (
     <AdminSection
-      title="Users, announcements and audit"
-      description="Accounts and role assignments are always filtered by the server to your administrative scope."
+      title={titles[section]}
+      description={section === 'all' ? 'Accounts and role assignments are always filtered by the server to your administrative scope.' : undefined}
     >
-      {canHere('users.read') ? <UsersPanel competitionId={competitionId} /> : (
+      {section !== 'announcements' && section !== 'audit' ? (canHere('users.read') ? <UsersPanel competitionId={competitionId} /> : (
         <p className={styles.muted}>Your account cannot read user records.</p>
-      )}
+      )) : null}
 
-      <div className={styles.divider} />
-      {isSuperAdmin ? <AdminAccountsPanel competitionId={competitionId} /> : (
+      {section === 'all' ? <div className={styles.divider} /> : null}
+      {section !== 'announcements' && section !== 'audit' ? (isSuperAdmin ? <AdminAccountsPanel competitionId={competitionId} /> : (
         <p className={styles.muted}>Administrator account provisioning is restricted to a super administrator.</p>
-      )}
+      )) : null}
 
-      <div className={styles.divider} />
-      {canHere('announcements.manage') ? (
+      {section === 'all' ? <div className={styles.divider} /> : null}
+      {section !== 'users' && section !== 'audit' ? (canHere('announcements.manage') ? (
         <AnnouncementsPanel competitionId={competitionId} />
       ) : (
         <p className={styles.muted}>Announcement management requires the announcements manage permission.</p>
-      )}
+      )) : null}
 
-      <div className={styles.divider} />
-      {canHere('audit.read') ? <AuditPanel competitionId={competitionId} /> : (
+      {section === 'all' ? <div className={styles.divider} /> : null}
+      {section !== 'users' && section !== 'announcements' ? (canHere('audit.read') ? <AuditPanel competitionId={competitionId} /> : (
         <p className={styles.muted}>Audit history requires the audit read permission.</p>
-      )}
+      )) : null}
     </AdminSection>
   );
 }

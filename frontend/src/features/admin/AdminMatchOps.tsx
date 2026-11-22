@@ -16,6 +16,7 @@ import {
   lifecycleActions,
 } from '@/features/official/OfficialWorkspace';
 import { useMatchLive } from '@/features/matches/useMatchLive';
+import { LineupPublishingPanel } from '@/features/lineups/LineupPublishingPanel';
 import {
   competitionsApi,
   fixturesApi,
@@ -341,6 +342,7 @@ function FixtureRow({
             matchId={matchId}
             competitionId={competitionId}
             canManage={canManageMatches}
+            canPublish={canManage || canManageMatches}
             canAssignOfficials={canAssignOfficials}
             currentUserId={currentUserId}
             onChanged={() => onChanged(matchId)}
@@ -561,6 +563,7 @@ function MatchAdminPanel({
   matchId,
   competitionId,
   canManage,
+  canPublish,
   canAssignOfficials,
   currentUserId,
   onChanged,
@@ -571,6 +574,7 @@ function MatchAdminPanel({
   matchId: string;
   competitionId: string;
   canManage: boolean;
+  canPublish: boolean;
   canAssignOfficials: boolean;
   currentUserId: string | null;
   onChanged: () => void;
@@ -625,6 +629,21 @@ function MatchAdminPanel({
         </div>
         <Link className="tl-btn tl-btn-sm" href={`/matches/${matchId}`}>Open public match page</Link>
       </header>
+
+      {canPublish ? (
+        <LineupPublishingPanel
+          matchId={matchId}
+          scheduledAt={detail.match.fixture.scheduledAt}
+          fixtureStatus={detail.match.fixture.status}
+          matchStatus={detail.match.status}
+          homeTeamRegistrationId={detail.match.homeRegistration?.id ?? null}
+          awayTeamRegistrationId={detail.match.awayRegistration?.id ?? null}
+          homeTeamName={detail.match.homeTeam?.name ?? 'Home team'}
+          awayTeamName={detail.match.awayTeam?.name ?? 'Away team'}
+          lineups={detail.lineups}
+          canPublish={canPublish}
+        />
+      ) : null}
 
       {canManage ? (
         <>

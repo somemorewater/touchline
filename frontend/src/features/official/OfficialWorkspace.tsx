@@ -6,6 +6,7 @@ import { Activity, ClipboardCheck, History, Plus, ShieldAlert } from 'lucide-rea
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { LineupPublishingPanel } from '@/features/lineups/LineupPublishingPanel';
 import { errorMessage } from '@/lib/api/client';
 import {
   matchesApi,
@@ -198,6 +199,18 @@ function OfficialMatchCard({ match }: { match: OfficialMatch }) {
           <p className="tl-alert tl-alert-error" role="alert">Could not load this match.</p>
         ) : (
           <div className="tl-stack">
+            <LineupPublishingPanel
+              matchId={match.matchId}
+              scheduledAt={detail.match.fixture.scheduledAt}
+              fixtureStatus={detail.match.fixture.status}
+              matchStatus={detail.match.status}
+              homeTeamRegistrationId={detail.match.homeRegistration?.id ?? null}
+              awayTeamRegistrationId={detail.match.awayRegistration?.id ?? null}
+              homeTeamName={detail.match.homeTeam?.name ?? match.homeTeamName}
+              awayTeamName={detail.match.awayTeam?.name ?? match.awayTeamName}
+              lineups={detail.lineups}
+              canPublish
+            />
             <MatchActions
               detail={detail}
               actions={actions}

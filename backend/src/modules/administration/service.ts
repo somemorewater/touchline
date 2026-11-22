@@ -1,10 +1,11 @@
-import { and, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { db } from '../../database/client.js';
 import {
   competitions,
   fixtures,
   lineups,
   matches,
+  playerRegistrationEdits,
   playerRegistrations,
   seasons,
   standingsSnapshots,
@@ -65,6 +66,7 @@ export async function competitionOverview(
     lineupRows,
     currentSnapshots,
     pendingRegistrations,
+    registrationEditRows,
     fullTimeUnconfirmed,
     overdueScheduled,
     matchesWithoutLineups,
@@ -118,6 +120,13 @@ export async function competitionOverview(
         ),
       ),
     db
+      .select({ registrationId: playerRegistrationEdits.registrationId, status: playerRegistrationEdits.status })
+      .from(playerRegistrationEdits)
+      .innerJoin(playerRegistrations, eq(playerRegistrationEdits.registrationId, playerRegistrations.id))
+      .innerJoin(seasons, eq(playerRegistrations.seasonId, seasons.id))
+      .where(and(...seasonFilter, eq(playerRegistrations.status, 'approved')))
+      .orderBy(desc(playerRegistrationEdits.createdAt)),
+    db
       .select({ count: sql<number>`count(*)::int` })
       .from(matches)
       .innerJoin(fixtures, eq(matches.fixtureId, fixtures.id))
@@ -155,14 +164,26 @@ export async function competitionOverview(
 
   const teams = toCountMap(teamRows);
   const players = toCountMap(playerRows);
+  const latestEdits = new Map<string, string>();
+  for (const edit of registrationEditRows) {
+    if (!latestEdits.has(edit.registrationId)) latestEdits.set(edit.registrationId, edit.status);
+  }
+  for (const status of latestEdits.values()) {
+    if (status !== 'pending' && status !== 'rejected') continue;
+    players.approved = Math.max(0, (players.approved ?? 0) - 1);
+    const displayStatus = status === 'pending' ? 'pending_changes' : 'rejected_changes';
+    players[displayStatus] = (players[displayStatus] ?? 0) + 1;
+  }
+  const pendingChangesCount = [...latestEdits.values()].filter((status) => status === 'pending').length;
+  const pendingRegistrationCount = (pendingRegistrations[0]?.count ?? 0) + pendingChangesCount;
   const fixturesByStatus = toCountMap(fixtureRows);
   const matchesByStatus = toCountMap(matchRows);
   const lineupsByStatus = toCountMap(lineupRows);
 
   const warnings: string[] = [];
   if ((teams.approved ?? 0) < 2) warnings.push('Fewer than two approved team entries.');
-  if ((pendingRegistrations[0]?.count ?? 0) > 0) {
-    warnings.push(`${pendingRegistrations[0]?.count} player registration(s) await review.`);
+  if (pendingRegistrationCount > 0) {
+    warnings.push(`${pendingRegistrationCount} player registration(s) or proposed changes await review.`);
   }
   if ((fullTimeUnconfirmed[0]?.count ?? 0) > 0) {
     warnings.push(`${fullTimeUnconfirmed[0]?.count} full-time result(s) are unconfirmed.`);
@@ -187,7 +208,7 @@ export async function competitionOverview(
     lineups: lineupsByStatus,
     standings: { currentSnapshots: currentSnapshots[0]?.count ?? 0 },
     operational: {
-      pendingRegistrations: pendingRegistrations[0]?.count ?? 0,
+      pendingRegistrations: pendingRegistrationCount,
       fullTimeUnconfirmed: fullTimeUnconfirmed[0]?.count ?? 0,
       overdueScheduledFixtures: overdueScheduled[0]?.count ?? 0,
       upcomingMatchesWithoutLineups: matchesWithoutLineups.length,

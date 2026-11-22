@@ -14,7 +14,7 @@ import { AdminTeams } from './AdminTeams';
 import styles from './Admin.module.css';
 
 export function AdminConsole() {
-  const { user, isSuperAdmin, hasRole } = useAuth();
+  const { user, isSuperAdmin, hasRole, can, canIn } = useAuth();
   const { competition, season } = useActiveCompetition();
 
   if (!isSuperAdmin && !hasRole('competition_admin')) {
@@ -25,6 +25,38 @@ export function AdminConsole() {
       </EmptyState>
     );
   }
+
+  const visibleFor = (...permissions: string[]) =>
+    isSuperAdmin || permissions.some((permission) =>
+      can(permission) || (competition ? canIn(permission, competition.id) : false),
+    );
+  const tabs = [
+    { id: 'overview', label: 'Overview', content: <AdminOverview /> },
+    ...(visibleFor('competitions.read', 'competitions.create', 'competitions.update')
+      ? [{ id: 'competitions', label: 'Competition Management', content: <AdminCompetitions /> }]
+      : []),
+    ...(visibleFor('teams.read', 'teams.manage', 'captains.manage')
+      ? [{ id: 'teams', label: 'Team Management', content: <AdminTeams section="teams" /> }]
+      : []),
+    ...(visibleFor('players.read', 'players.manage', 'registrations.review')
+      ? [{ id: 'players', label: 'Player Management', content: <AdminTeams section="players" /> }]
+      : []),
+    ...(visibleFor('fixtures.read', 'fixtures.manage', 'matches.read', 'matches.manage', 'lineups.read', 'lineups.manage')
+      ? [{ id: 'matches', label: 'Match Management', content: <AdminMatchOps /> }]
+      : []),
+    ...(visibleFor('users.read', 'users.manage', 'roles.manage')
+      ? [{ id: 'users', label: 'User Management', content: <AdminPeople section="users" /> }]
+      : []),
+    ...(visibleFor('announcements.manage')
+      ? [{ id: 'announcements', label: 'Announcements', content: <AdminPeople section="announcements" /> }]
+      : []),
+    ...(visibleFor('audit.read')
+      ? [{ id: 'audit', label: 'Audit Logs', content: <AdminPeople section="audit" /> }]
+      : []),
+    ...(visibleFor('disciplinary.manage', 'disputes.manage')
+      ? [{ id: 'governance', label: 'Cases and Disputes', content: <AdminGovernance /> }]
+      : []),
+  ];
 
   return (
     <>
@@ -45,14 +77,7 @@ export function AdminConsole() {
 
       <Tabs
         label="Administration sections"
-        tabs={[
-          { id: 'overview', label: 'Overview', content: <AdminOverview /> },
-          { id: 'competitions', label: 'Competitions', content: <AdminCompetitions /> },
-          { id: 'teams', label: 'Teams & players', content: <AdminTeams /> },
-          { id: 'fixtures', label: 'Fixtures & matches', content: <AdminMatchOps /> },
-          { id: 'governance', label: 'Cases & notices', content: <AdminGovernance /> },
-          { id: 'people', label: 'Users & audit', content: <AdminPeople /> },
-        ]}
+        tabs={tabs}
       />
       <p className={styles.muted}>
         Signed in as {user?.displayName}. Competition scope limits what each section can change; the server rejects anything outside it.

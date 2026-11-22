@@ -22,6 +22,16 @@ export const useMatchDetail = (matchId: string) =>
     enabled: Boolean(matchId),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data && isLive(data.match.status) ? 15_000 : false;
+      if (!data) return false;
+      if (isLive(data.match.status)) return 15_000;
+      const kickoffAt = data.match.kickoffAt;
+      if (!kickoffAt) return false;
+      const kickoffMs = Date.parse(kickoffAt);
+      const availabilityMs = kickoffMs - 60 * 60 * 1000;
+      if (Date.now() < availabilityMs) {
+        return Math.min(availabilityMs - Date.now() + 500, 60 * 60 * 1000);
+      }
+      if (Date.now() < kickoffMs) return 60_000;
+      return false;
     },
   });

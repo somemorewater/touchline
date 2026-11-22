@@ -222,6 +222,7 @@ export const registrationsApi = {
       teamId?: string;
       teamRegistrationId?: string;
       status?: string;
+      displayStatus?: string;
     } = {},
   ) {
     return request<PlayerRegistrationDto[]>('/player-registrations', { query: query as Query });
@@ -489,6 +490,9 @@ export const lineupsApi = {
   },
   confirm(id: string, reason?: string) {
     return request<LineupDto>(`/lineups/${id}/confirm`, { method: 'POST', body: reason ? { reason } : {} });
+  },
+  publish(id: string) {
+    return request<LineupDto>(`/lineups/${id}/publish`, { method: 'POST' });
   },
   returnLineup(id: string, reason: string) {
     return request<LineupDto>(`/lineups/${id}/return`, { method: 'POST', body: { reason } });

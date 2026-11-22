@@ -16,11 +16,11 @@ Modules:
 |---|---|
 | `draft` | Work in progress; incomplete selections are allowed |
 | `submitted` | Complete selection awaiting review |
-| `confirmed` | Reviewed and approved; the authoritative lineup for statistics |
+| `confirmed` | Reviewed and approved; awaiting explicit publication |
 | `returned` | Reviewer sent it back; the captain may edit it again |
-| `published` | Legacy Phase 3 status, still accepted for compatibility |
+| `published` | Publication recorded; public only from one hour before scheduled kickoff |
 
-Canonical path: `draft → submitted → confirmed`, with `returned` reachable from `submitted` or `confirmed`. Withdrawing any non-draft lineage resets it to `draft`. `published` can be confirmed, matching the Phase 3 vocabulary.
+Canonical path: `draft → submitted → confirmed → published`, with `returned` reachable from `submitted`, `confirmed` or `published`. Withdrawing any non-draft lineage resets it to `draft`. Correcting a published lineup demotes it to `confirmed` and clears its publication metadata.
 
 `returned` is a stored status, not a label. A captain editing a returned lineup transitions it back to `draft` and clears the return metadata in the same write.
 
@@ -36,6 +36,7 @@ Canonical path: `draft → submitted → confirmed`, with `returned` reachable f
 | PATCH | `/api/v1/lineups/:id` | captain before kickoff, or competition administrator |
 | POST | `/api/v1/lineups/:id/submit` | captain, or competition administrator; no body required (`reason` may be supplied as an object field) |
 | POST | `/api/v1/lineups/:id/confirm` | competition administrator only |
+| POST | `/api/v1/lineups/:id/publish` | scoped competition manager or assigned official with `lineups.manage` |
 | POST | `/api/v1/lineups/:id/return` | competition administrator only; `reason` required |
 | POST | `/api/v1/lineups/:id/withdraw` | captain, or competition administrator |
 | GET | `/api/v1/team-entries/:id/lineups` | owning captain or scoped administrator |
@@ -129,10 +130,11 @@ A correction does not silently rewrite history: the audit row keeps the previous
 
 - **Submit** (`draft`/`returned → submitted`) accepts no body (or an optional `{ "reason": "..." }` object), revalidates the persisted complete XI and eligibility, sets `submitted_at`, and audits `lineup.submitted`.
 - **Confirm** (`submitted`/`published → confirmed`) revalidates the complete XI and eligibility, stamps `confirmed_at`/`confirmed_by`, clears return metadata, audits `lineup.confirmed`, and broadcasts `lineup.update` after commit.
+- **Publish** (`confirmed → published`) is available to a scoped competition manager or an assigned official with `lineups.manage`. It revalidates the complete XI and eligibility, records `published_at`/`published_by`, and audits `lineup.published`. A legacy `published` row without publication metadata can use this action to record its publication.
 - **Return** (`submitted`/`confirmed → returned`) requires a reason, stamps `returned_at`/`returned_by`/`return_reason`, clears confirmation metadata, and audits `lineup.returned`.
 - **Withdraw** (any non-draft → `draft`) clears submission, confirmation and return metadata and audits `lineup.withdrawn`. A withdrawal is not a deletion; the audit history remains.
 
-Only competition administrators may confirm or return. The authority is `matches.manage` or `fixtures.manage` in competition scope, deliberately **not** `lineups.manage`, because match officials also hold `lineups.manage` for their assigned matches and must not gain competition-wide review power. Match officials can read all lineups for matches they are assigned to.
+Only competition administrators may confirm or return. The authority is `matches.manage` or `fixtures.manage` in competition scope, deliberately **not** `lineups.manage`, because match officials also hold `lineups.manage` for their assigned matches and must not gain competition-wide review power. Match officials can publish only for matches they are assigned to.
 
 ## Read visibility
 
@@ -147,7 +149,7 @@ Rules:
 
 - Callers with `all` see both lineups in every status.
 - Captains see their own team's lineup in every status.
-- On a public match, anyone sees `confirmed`/`published` lineups.
+- On a public match, anyone sees only `published` lineups after the scheduled availability time (one hour before kickoff). Publication is hidden when the fixture or match is postponed, cancelled or abandoned.
 - Everything else returns `404` rather than leaking a draft.
 
 Public responses omit `returnedBy`; `returnedAt`/`return_reason` are included only for managers, officials and reviewers. `confirmedBy` is never returned. Player responses contain registration ID, role, shirt number, position, coordinates and captain flag; private player records (date of birth, contact details, matriculation data) are not joined into lineup responses.
@@ -160,7 +162,7 @@ Public responses omit `returnedBy`; `returnedAt`/`return_reason` are included on
 
 ## Audit and realtime
 
-Lineup audit actions (entity type `lineup`): `lineup.created`, `lineup.updated`, `lineup.corrected`, `lineup.submitted`, `lineup.confirmed`, `lineup.returned`, `lineup.withdrawn`. Before/after snapshots and the reason are stored in `audit_logs`; no audit row is deleted.
+Lineup audit actions (entity type `lineup`): `lineup.created`, `lineup.updated`, `lineup.corrected`, `lineup.submitted`, `lineup.confirmed`, `lineup.published`, `lineup.returned`, `lineup.withdrawn`. Before/after snapshots and the reason are stored in `audit_logs`; no audit row is deleted. Public availability is computed from the current scheduled kickoff, so rescheduling also changes the availability time.
 
 Only confirmed lineups are broadcast, as a sanitised `lineup.update` frame on the match channel, after the transaction commits. Draft rosters never reach public subscribers. See `realtime.md`.
 

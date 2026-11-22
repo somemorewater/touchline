@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, lte, or, type SQL } from 'drizzle-orm';
 import { db } from '../../database/client.js';
 import {
   auditLogs,
@@ -17,9 +17,11 @@ import type { AuthContext } from '../../security/context.js';
 import {
   canManageCompetitionLineups,
   canManageTeamLineup,
+  canPublishMatchLineup,
   canReviewLineups,
   isTeamCaptain,
   loadMatchScope,
+  PUBLIC_LINEUP_STATUSES,
   type MatchScope,
 } from '../../security/access.js';
 import { loadMatchContext, lockMatch } from '../matches/engine.js';
@@ -440,7 +442,7 @@ export async function getLineup(auth: AuthContext | null, lineupId: string) {
   const { context } = await loadContextForLineup(lineupId);
   const visibility = await resolveLineupVisibility(auth, context.scope);
   const result = await loadLineupWithPlayers(db, lineupId);
-  if (!canSeeLineup(visibility, result.lineup)) throw notFound('Lineup not found.');
+  if (!canSeeLineup(visibility, result.lineup, context.scope)) throw notFound('Lineup not found.');
   return sanitizeLineup(
     result.lineup,
     result.players,
@@ -509,7 +511,9 @@ export async function updateLineup(
       { requireComplete },
     );
 
-    const nextStatus = existing.status === 'returned' && !admin ? 'draft' : existing.status;
+    const nextStatus = existing.status === 'published'
+      ? 'confirmed'
+      : existing.status === 'returned' && !admin ? 'draft' : existing.status;
     const [updated] = await tx
       .update(lineups)
       .set({
@@ -519,6 +523,7 @@ export async function updateLineup(
         ...(nextStatus === 'draft' && existing.status === 'returned'
           ? { returnedAt: null, returnedBy: null, returnReason: null }
           : {}),
+        ...(existing.status === 'published' ? { publishedAt: null, publishedBy: null } : {}),
       })
       .where(eq(lineups.id, lineupId))
       .returning();
@@ -632,7 +637,7 @@ export async function confirmLineup(auth: AuthContext, lineupId: string, reason?
         throw forbidden('Confirming a lineup requires competition administrative scope.');
       }
       assertReviewable(context);
-      if (lineup.status !== 'submitted' && lineup.status !== 'published') {
+      if (lineup.status !== 'submitted') {
         throw conflict('Only submitted lineups can be confirmed.');
       }
       const roster = await tx
@@ -652,6 +657,8 @@ export async function confirmLineup(auth: AuthContext, lineupId: string, reason?
       status: 'confirmed',
       confirmedAt: new Date(),
       confirmedBy: auth.userId,
+      publishedAt: null,
+      publishedBy: null,
       returnedAt: null,
       returnedBy: null,
       returnReason: null,
@@ -689,6 +696,47 @@ export async function confirmLineup(auth: AuthContext, lineupId: string, reason?
   return shaped;
 }
 
+export async function publishLineup(auth: AuthContext, lineupId: string) {
+  const { context: initialContext } = await loadContextForLineup(lineupId);
+  if (!(await canPublishMatchLineup(auth, initialContext.scope))) {
+    throw forbidden('Publishing a lineup requires scoped match/fixture management or an assigned match official.');
+  }
+
+  const publishedAt = new Date();
+  const result = await transitionLineup(
+    auth,
+    lineupId,
+    async (tx, context, lineup) => {
+      if (!(await canPublishMatchLineup(auth, context.scope))) {
+        throw forbidden('Publishing a lineup requires scoped match/fixture management or an assigned match official.');
+      }
+      if (context.fixture.status !== 'scheduled' || context.match.status !== 'scheduled') {
+        throw conflict('A lineup can only be published for a scheduled match.');
+      }
+      if (!context.fixture.scheduledAt) {
+        throw conflict('Set the scheduled kick-off before publishing a lineup.');
+      }
+      const legacyUntrackedPublication = lineup.status === 'published' && lineup.publishedAt === null;
+      if (lineup.status !== 'confirmed' && !legacyUntrackedPublication) {
+        throw conflict('Only a confirmed lineup can be published.');
+      }
+      const roster = await tx.select().from(lineupPlayers).where(eq(lineupPlayers.lineupId, lineup.id));
+      await validateLineupSelection(
+        tx,
+        context.scope,
+        lineup.teamRegistrationId,
+        lineup.formation,
+        currentPlayersAsInput(roster),
+        { requireComplete: true },
+      );
+    },
+    { status: 'published', publishedAt, publishedBy: auth.userId },
+    'lineup.published',
+    null,
+  );
+  return sanitizeLineup(result.lineup, result.players, true);
+}
+
 export async function returnLineup(auth: AuthContext, lineupId: string, reason: string) {
   const { context: initialContext } = await loadContextForLineup(lineupId);
   if (!canReviewLineups(auth, initialContext.scope.competitionId)) {
@@ -702,8 +750,8 @@ export async function returnLineup(auth: AuthContext, lineupId: string, reason: 
         throw forbidden('Returning a lineup requires competition administrative scope.');
       }
       assertReviewable(context);
-      if (lineup.status !== 'submitted' && lineup.status !== 'confirmed') {
-        throw conflict('Only submitted or confirmed lineups can be returned.');
+      if (lineup.status !== 'submitted' && lineup.status !== 'confirmed' && lineup.status !== 'published') {
+        throw conflict('Only submitted, confirmed or published lineups can be returned.');
       }
     },
     {
@@ -713,6 +761,8 @@ export async function returnLineup(auth: AuthContext, lineupId: string, reason: 
       returnReason: reason,
       confirmedAt: null,
       confirmedBy: null,
+      publishedAt: null,
+      publishedBy: null,
     },
     'lineup.returned',
     reason,
@@ -762,6 +812,8 @@ export async function withdrawLineup(auth: AuthContext, lineupId: string, reason
       submittedAt: null,
       confirmedAt: null,
       confirmedBy: null,
+      publishedAt: null,
+      publishedBy: null,
       returnedAt: null,
       returnedBy: null,
       returnReason: null,
@@ -816,12 +868,21 @@ export async function listLineupHistory(auth: AuthContext, query: LineupListQuer
     }
     conditions.push(eq(lineups.matchId, query.matchId));
     if (!visibility.all) {
-      const visibleLineup = visibility.publicMatch
-        ? or(
-            inArray(lineups.teamRegistrationId, visibility.ownedTeamIds),
-            inArray(lineups.status, ['confirmed', 'published']),
+      const availabilityAt = scope.fixtureScheduledAt
+        ? scope.fixtureScheduledAt.getTime() - 60 * 60 * 1000
+        : Number.POSITIVE_INFINITY;
+      const publicCandidate = visibility.publicMatch &&
+        availabilityAt <= Date.now() &&
+        !['postponed', 'cancelled', 'abandoned'].includes(scope.fixtureStatus) &&
+        !['postponed', 'cancelled', 'abandoned'].includes(scope.matchStatus)
+        ? and(
+            inArray(lineups.status, [...PUBLIC_LINEUP_STATUSES]),
+            isNotNull(lineups.publishedAt),
+            lte(lineups.publishedAt, new Date()),
           )
-        : inArray(lineups.teamRegistrationId, visibility.ownedTeamIds);
+        : undefined;
+      const ownerLineups = inArray(lineups.teamRegistrationId, visibility.ownedTeamIds);
+      const visibleLineup = publicCandidate ? or(ownerLineups, publicCandidate) : ownerLineups;
       if (visibleLineup) conditions.push(visibleLineup);
     }
     allowedCompetitionIds.add(scope.competitionId);

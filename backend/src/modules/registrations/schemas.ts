@@ -35,6 +35,7 @@ export const playerRegistrationListQuerySchema = z
     teamId: uuidSchema.optional(),
     teamRegistrationId: uuidSchema.optional(),
     status: z.enum(registrationStatuses).optional(),
+    displayStatus: z.enum([...registrationStatuses, 'pending_changes', 'rejected_changes']).optional(),
   })
   .strict();
 

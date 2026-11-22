@@ -23,6 +23,7 @@ import {
 } from '../../security/access.js';
 import { PERMISSIONS } from '../../security/permissions.js';
 import { notifyTeamCaptain } from '../notifications/service.js';
+import { registrationDisplayStatus } from './status.js';
 import type {
   playerRegistrationListQuerySchema,
   playerRegistrationRejectSchema,
@@ -214,7 +215,11 @@ async function registrationDetail(
   registrationId: string,
 ) {
   const scope = await loadRegistrationScope(registrationId, executor);
-  const [pendingEdit] = await executor.select().from(playerRegistrationEdits).where(and(eq(playerRegistrationEdits.registrationId, registrationId), eq(playerRegistrationEdits.status, 'pending'))).limit(1);
+  const edits = await executor.select().from(playerRegistrationEdits)
+    .where(eq(playerRegistrationEdits.registrationId, registrationId))
+    .orderBy(desc(playerRegistrationEdits.createdAt));
+  const latestEdit = edits[0] ?? null;
+  const pendingEdit = latestEdit?.status === 'pending' ? latestEdit : null;
   return {
     ...scope.registration,
     player: scope.player,
@@ -223,6 +228,8 @@ async function registrationDetail(
     season: scope.season,
     competition: scope.competition,
     pendingEdit: pendingEdit ?? null,
+    latestEdit,
+    displayStatus: registrationDisplayStatus(scope.registration.status, latestEdit?.status),
   };
 }
 
@@ -448,7 +455,12 @@ export async function listPlayerRegistrations(
       eq(playerRegistrations.teamRegistrationId, filters.teamRegistrationId),
     );
   }
-  if (filters.status) conditions.push(eq(playerRegistrations.status, filters.status));
+  const derivedEditFilter = filters.displayStatus === 'pending_changes' || filters.displayStatus === 'rejected_changes';
+  const registrationStatusFilter: typeof playerRegistrations.$inferSelect.status | undefined =
+    filters.status ?? (derivedEditFilter ? 'approved' : filters.displayStatus as typeof playerRegistrations.$inferSelect.status | undefined);
+  if (registrationStatusFilter) {
+    conditions.push(eq(playerRegistrations.status, registrationStatusFilter));
+  }
 
   if (!globalReviewer) {
     const [captainEntry] = await db
@@ -488,15 +500,33 @@ export async function listPlayerRegistrations(
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(playerRegistrations.createdAt));
 
-  return Promise.all(rows.map(async row => ({
+  const registrationIds = rows.map((row) => row.registration.id);
+  const edits = registrationIds.length
+    ? await db.select().from(playerRegistrationEdits)
+      .where(inArray(playerRegistrationEdits.registrationId, registrationIds))
+      .orderBy(desc(playerRegistrationEdits.createdAt))
+    : [];
+  const latestEdits = new Map<string, (typeof edits)[number]>();
+  for (const edit of edits) {
+    if (!latestEdits.has(edit.registrationId)) latestEdits.set(edit.registrationId, edit);
+  }
+
+  const result = rows.map((row) => {
+    const latestEdit = latestEdits.get(row.registration.id) ?? null;
+    const displayStatus = registrationDisplayStatus(row.registration.status, latestEdit?.status);
+    return {
     ...row.registration,
     player: row.player,
     team: row.team,
     teamRegistration: row.entry,
     season: row.season,
     competition: row.competition,
-    pendingEdit: (await db.select().from(playerRegistrationEdits).where(and(eq(playerRegistrationEdits.registrationId, row.registration.id), eq(playerRegistrationEdits.status, 'pending'))).limit(1))[0] ?? null,
-  })));
+    pendingEdit: latestEdit?.status === 'pending' ? latestEdit : null,
+    latestEdit,
+    displayStatus,
+    };
+  });
+  return filters.displayStatus ? result.filter((row) => row.displayStatus === filters.displayStatus) : result;
 }
 
 export async function getPlayerRegistration(

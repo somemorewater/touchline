@@ -28,7 +28,7 @@ export const PUBLIC_COMPETITION_STATUSES = [
   'archived',
 ] as const;
 
-export const PUBLIC_LINEUP_STATUSES = ['published', 'confirmed'] as const;
+export const PUBLIC_LINEUP_STATUSES = ['published'] as const;
 
 export interface CompetitionVisibility {
   id: string;
@@ -44,6 +44,9 @@ export interface MatchScope {
   competitionStatus: string;
   competitionVisibility: string;
   fixturePublishedAt: Date | null;
+  fixtureScheduledAt: Date | null;
+  fixtureStatus: string;
+  matchStatus: string;
   homeTeamRegistrationId: string;
   awayTeamRegistrationId: string;
 }
@@ -136,6 +139,9 @@ export async function loadMatchScope(matchId: string): Promise<MatchScope | null
       competitionStatus: competitions.status,
       competitionVisibility: competitions.visibility,
       fixturePublishedAt: fixtures.publishedAt,
+      fixtureScheduledAt: fixtures.scheduledAt,
+      fixtureStatus: fixtures.status,
+      matchStatus: matches.status,
       homeTeamRegistrationId: fixtures.homeTeamRegistrationId,
       awayTeamRegistrationId: fixtures.awayTeamRegistrationId,
     })
@@ -344,6 +350,18 @@ export function isPublicMatch(scope: MatchScope): boolean {
       visibility: scope.competitionVisibility,
     })
   );
+}
+
+/** Assigned match officials may publish only lineups for their own matches. */
+export async function canPublishMatchLineup(
+  auth: AuthContext | null,
+  scope: MatchScope,
+): Promise<boolean> {
+  if (!auth) return false;
+  if (hasPermissionInCompetition(auth, PERMISSIONS.matchesManage, scope.competitionId) ||
+      hasPermissionInCompetition(auth, PERMISSIONS.fixturesManage, scope.competitionId)) return true;
+  if (!hasPermission(auth, PERMISSIONS.lineupsManage)) return false;
+  return isMatchOfficial(auth.userId, scope.matchId);
 }
 
 export async function canReadMatch(

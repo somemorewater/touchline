@@ -135,7 +135,7 @@ OpenAPI UI is `/docs`. Path parameters shown as `:id` must be UUIDs; otherwise t
 | POST | `/api/v1/matches/:id/report` | reporting authority | Full-time result submission; confirms the derived score |
 | POST | `/api/v1/matches/:id/result/correct` | `matches.manage` | Audited re-confirmation after a correction |
 | GET | `/api/v1/matches/:id/result/history` | reporting authority | `match.result.*` audit rows, newest first |
-| GET | `/api/v1/matches/:id/lineups` | public, optionally private | Confirmed/published public; draft/returned/submitted owner/manager/official |
+| GET | `/api/v1/matches/:id/lineups` | public, optionally private | Published public from one hour before kickoff; draft/returned/submitted/confirmed owner/manager/official |
 | GET | `/api/v1/lineups/formations` | public | Supported formations with goalkeeper and outfield slots |
 | GET | `/api/v1/lineups` | authenticated | History; requires match/team/season/competition filter |
 | POST | `/api/v1/matches/:id/lineups` | captain / scoped admin | Creates a `draft`; incomplete drafts allowed |
@@ -143,6 +143,7 @@ OpenAPI UI is `/docs`. Path parameters shown as `:id` must be UUIDs; otherwise t
 | PATCH | `/api/v1/lineups/:id` | captain before kickoff / scoped admin | Admin corrections after kickoff/confirmation require `reason` |
 | POST | `/api/v1/lineups/:id/submit` | captain / scoped admin | No body required; optional `reason`; revalidates the persisted complete XI and eligibility |
 | POST | `/api/v1/lineups/:id/confirm` | `matches.manage`/`fixtures.manage` | Revalidates and broadcasts post-commit |
+| POST | `/api/v1/lineups/:id/publish` | scoped fixture/match manager or assigned official with `lineups.manage` | Records publication; public at kickoff minus one hour |
 | POST | `/api/v1/lineups/:id/return` | same | Requires `reason`; clears confirmation |
 | POST | `/api/v1/lineups/:id/withdraw` | captain / scoped admin | Returns the lineup to `draft`; audited |
 | GET | `/api/v1/team-entries/:id/lineups` | captain / scoped admin | Team-entry lineup history |
@@ -237,7 +238,7 @@ Then call protected routes with `Authorization: Bearer <accessToken>`.
 - Public fixture: `published_at` set and not in the future, with a public parent competition.
 - Fixture list with `competitionId`/`seasonId` verifies view or manage permission first and returns `404` for private resources; scoped administrators see unpublished fixtures in their competitions.
 - Draft fixtures and unpublished fixtures are visible to the fixture manager, the assigned official and the participating captain.
-- Public lineup: `published` or `confirmed`. Draft, returned and submitted lineups on public matches are visible only to the team captain, a scoped manager, or an assigned match official.
+- Public lineup: only `published` lineups on a public, scheduled match, after kickoff minus one hour. Postponed, cancelled and abandoned matches suppress public lineups. Draft, returned, submitted and confirmed lineups are visible only to the team captain, a scoped manager, or an assigned match official.
 - Public statistics and standings: confirmed full-time results only. Public competitions are readable; private competitions require management scope, an assigned match or captaincy. Unpublished fixtures are excluded from public statistics.
 - Public announcements: published, not archived, audience `public`, parent competition public or absent. Captains/officials see their audience classes in participating competitions; scoped administrators see every audience in scope. Drafts and archived announcements never appear publicly.
 - Public team: has an `approved` team entry in a public, published/active/completed/archived competition. Draft entries are visible only to the owning captain and scoped administrators.

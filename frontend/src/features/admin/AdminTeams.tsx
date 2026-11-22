@@ -18,14 +18,15 @@ import { DISPLAY_TIME_ZONE } from '@/types';
 import { AdminSection, Feedback, Field, statusLabel, useAdminAction } from './ui';
 import styles from './Admin.module.css';
 
-const REG_STATUSES = ['draft', 'submitted', 'under_review', 'approved', 'rejected', 'withdrawn'];
+const REG_STATUSES = ['draft', 'submitted', 'under_review', 'approved', 'pending_changes', 'rejected_changes', 'rejected', 'withdrawn'];
 
-export function AdminTeams() {
+export function AdminTeams({ section = 'all' }: { section?: 'teams' | 'players' | 'all' }) {
   const { competition, season } = useActiveCompetition();
+  const title = section === 'teams' ? 'Team management' : section === 'players' ? 'Player management' : 'Teams and player registrations';
 
   if (!competition || !season) {
     return (
-      <AdminSection title="Teams and player registrations">
+      <AdminSection title={title}>
         <p className={styles.muted}>Select a competition and season to manage its teams and registrations.</p>
       </AdminSection>
     );
@@ -33,12 +34,12 @@ export function AdminTeams() {
 
   return (
     <AdminSection
-      title="Teams and player registrations"
-      description={`${competition.name} · ${season.label}. Team entries and player registrations are reviewed inside the season scope.`}
+      title={title}
+      description={`${competition.name} · ${season.label}. Access remains limited by the existing team and registration permissions.`}
     >
-      <TeamEntries competitionId={competition.id} seasonId={season.id} />
-      <div className={styles.divider} />
-      <PlayerRegistrations seasonId={season.id} competitionId={competition.id} />
+      {section !== 'players' ? <TeamEntries competitionId={competition.id} seasonId={season.id} /> : null}
+      {section === 'all' ? <div className={styles.divider} /> : null}
+      {section !== 'teams' ? <PlayerRegistrations seasonId={season.id} competitionId={competition.id} /> : null}
     </AdminSection>
   );
 }
@@ -481,7 +482,7 @@ function PlayerRegistrations({ seasonId, competitionId }: { seasonId: string; co
   });
   const registrationsQ = useQuery({
     queryKey: ['admin-registrations', seasonId, status],
-    queryFn: () => registrationsApi.list({ seasonId, status: status || undefined }),
+    queryFn: () => registrationsApi.list({ seasonId, displayStatus: status || undefined }),
   });
 
   const invalidate = () => {
@@ -607,8 +608,8 @@ function RegistrationRow({
         <td>{registration.team.name}</td>
         <td>{positionLabel(registration.player.position) ?? 'Not recorded'}</td>
         <td className="num">{registration.shirtNumber ?? '—'}</td>
-        <td><span className="tl-badge">{statusLabel(registration.status)}</span></td>
-        <td>{registration.reviewNote ?? '—'}</td>
+        <td><span className="tl-badge">{statusLabel(registration.displayStatus ?? registration.status)}</span></td>
+        <td>{registration.latestEdit?.status === 'rejected' ? registration.latestEdit.reviewNote ?? 'Proposed changes were rejected; approved information remains unchanged.' : registration.reviewNote ?? '—'}</td>
         <td>
           <div className={styles.rowActions}>
             {registration.pendingEdit && canReview ? <>

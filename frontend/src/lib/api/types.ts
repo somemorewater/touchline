@@ -74,6 +74,7 @@ export type RegistrationStatus =
   | 'approved'
   | 'rejected'
   | 'withdrawn';
+export type RegistrationDisplayStatus = RegistrationStatus | 'pending_changes' | 'rejected_changes';
 
 export interface TeamDto {
   id: string;
@@ -143,6 +144,7 @@ export interface PlayerRegistrationDto {
   matriculationNumber: string | null;
   shirtNumber: number | null;
   status: RegistrationStatus;
+  displayStatus?: RegistrationDisplayStatus;
   eligibilityApproved: boolean;
   submittedAt: string | null;
   reviewedBy: string | null;
@@ -156,6 +158,7 @@ export interface PlayerRegistrationDto {
   season: SeasonDto;
   competition: CompetitionDto;
   pendingEdit?: { id: string; proposedBy: string; proposed: Record<string, unknown>; status: string; createdAt: string } | null;
+  latestEdit?: { id: string; proposedBy: string; proposed: Record<string, unknown>; status: string; reviewNote: string | null; createdAt: string } | null;
 }
 
 export interface PlayerRegistrationHistoryDto {
@@ -341,6 +344,8 @@ export interface LineupDto {
   status: LineupStatus;
   submittedAt: string | null;
   confirmedAt: string | null;
+  publishedAt: string | null;
+  publishedBy: string | null;
   returnedAt: string | null;
   returnReason: string | null;
   createdAt: string;

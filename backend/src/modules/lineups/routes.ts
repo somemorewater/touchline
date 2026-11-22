@@ -11,6 +11,7 @@ import {
   getLineup,
   getMatchLineups,
   listLineupHistory,
+  publishLineup,
   returnLineup,
   submitLineup,
   updateLineup,
@@ -192,6 +193,23 @@ export async function lineupRoutes(app: FastifyInstance) {
       const { id } = req.params as { id: string };
       const input = lineupReviewSchema.parse(req.body ?? {});
       return ok(reply, await confirmLineup(req.auth!, id, input.reason));
+    },
+  );
+
+  app.post(
+    '/lineups/:id/publish',
+    {
+      preHandler: app.authenticate,
+      schema: {
+        ...secure,
+        summary: 'Publish a confirmed lineup for scheduled public availability',
+        ...idParamsSchema,
+        response: { ...successResponse(), ...errorResponse },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      return ok(reply, await publishLineup(req.auth!, id));
     },
   );
 
