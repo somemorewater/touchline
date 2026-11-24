@@ -34,6 +34,7 @@ import {
   matchLifecycleSchema,
   matchOfficialAssignSchema,
   matchOfficialUpdateSchema,
+  matchReinstateSchema,
   matchReportSchema,
   matchRescheduleSchema,
   matchResultCorrectSchema,
@@ -46,6 +47,7 @@ import {
   listMatchOfficials,
   listMatchesForOfficial,
   removeMatchOfficial,
+  reinstateMatch,
   rescheduleMatch,
   submitMatchReport,
   transitionMatch,
@@ -493,6 +495,27 @@ export async function matchRoutes(app: FastifyInstance) {
       return ok(
         reply,
         await rescheduleMatch(requireAuth(req), id, matchRescheduleSchema.parse(req.body)),
+      );
+    },
+  );
+
+  app.post(
+    '/matches/:id/reinstate',
+    {
+      preHandler: app.authenticate,
+      schema: {
+        ...secure,
+        summary: 'Reinstate a cancelled match',
+        params: idParamsSchema.params,
+        body: jsonSchema(matchReinstateSchema),
+        response: { ...successResponse(), ...errorResponse },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      return ok(
+        reply,
+        await reinstateMatch(requireAuth(req), id),
       );
     },
   );

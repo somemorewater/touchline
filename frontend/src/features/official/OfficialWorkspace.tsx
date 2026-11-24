@@ -5,6 +5,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, ClipboardCheck, History, Plus, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { LineupPublishingPanel } from '@/features/lineups/LineupPublishingPanel';
 import { errorMessage } from '@/lib/api/client';
@@ -54,6 +55,8 @@ export function lifecycleActions(status: string): MatchLifecycleAction[] {
   switch (status) {
     case 'scheduled':
       return ['start', 'postpone', 'cancel'];
+    case 'cancelled':
+      return [];
     case 'first_half':
     case 'live':
       return ['half-time', 'abandon'];
@@ -77,6 +80,7 @@ export const ACTION_LABEL: Record<MatchLifecycleAction, string> = {
   postpone: 'Postpone',
   cancel: 'Cancel',
   abandon: 'Abandon',
+  reinstate: 'Reinstate',
 };
 
 export function OfficialWorkspace() {
@@ -275,6 +279,19 @@ export function MatchActions({
   const [added, setAdded] = useState(String(detail.match.addedMinutes ?? ''));
   const [rescheduleAt, setRescheduleAt] = useState('');
   const [reason, setReason] = useState('');
+  const [reinstateConfirmOpen, setReinstateConfirmOpen] = useState(false);
+  const [reinstateBusy, setReinstateBusy] = useState(false);
+
+  const handleReinstate = async () => {
+    setReinstateBusy(true);
+    try {
+      await matchesApi.reinstate(detail.match.id);
+      onRefresh();
+      setReinstateConfirmOpen(false);
+    } finally {
+      setReinstateBusy(false);
+    }
+  };
 
   return (
     <div className="tl-card">
@@ -345,6 +362,29 @@ export function MatchActions({
           </label>
           <button type="submit" className="tl-btn" disabled={busy || !rescheduleAt}>Reschedule</button>
         </form>
+      ) : null}
+
+      {detail.match.status === 'cancelled' ? (
+        <>
+          <button
+            type="button"
+            className="tl-btn tl-btn-primary"
+            disabled={busy}
+            onClick={() => setReinstateConfirmOpen(true)}
+          >
+            Reinstate match
+          </button>
+          <ConfirmDialog
+            open={reinstateConfirmOpen}
+            onClose={() => setReinstateConfirmOpen(false)}
+            onConfirm={handleReinstate}
+            title="Reinstate match"
+            message="This will restore the match to its previous scheduled state with its original kickoff time, venue, and all match details preserved."
+            confirmLabel="Reinstate match"
+            cancelLabel="Keep cancelled"
+            busy={reinstateBusy}
+          />
+        </>
       ) : null}
     </div>
   );

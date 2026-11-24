@@ -355,7 +355,8 @@ export type MatchLifecycleAction =
   | 'end'
   | 'postpone'
   | 'cancel'
-  | 'abandon';
+  | 'abandon'
+  | 'reinstate';
 
 export const matchesApi = {
   get(id: string) {
@@ -416,6 +417,12 @@ export const matchesApi = {
     return request<{ match: MatchResultDto['match'] }>(`/matches/${id}/${action}`, {
       method: 'POST',
       body: { reason: reason ?? null },
+    });
+  },
+  reinstate(id: string) {
+    return request<{ match: MatchResultDto['match'] }>(`/matches/${id}/reinstate`, {
+      method: 'POST',
+      body: {},
     });
   },
   reschedule(id: string, scheduledAt: string, reason?: string | null) {

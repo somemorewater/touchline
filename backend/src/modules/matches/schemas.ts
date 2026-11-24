@@ -91,6 +91,8 @@ export const matchReportSchema = z
 
 export const matchResultCorrectSchema = z.object({ reason }).strict();
 
+export const matchReinstateSchema = z.object({}).strict();
+
 export const matchOfficialAssignSchema = z
   .object({
     userId: uuidSchema,

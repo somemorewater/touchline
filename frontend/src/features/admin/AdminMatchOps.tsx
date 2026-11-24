@@ -3,10 +3,11 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarPlus, Flag, ListChecks, RefreshCw, Shuffle, Trophy } from 'lucide-react';
+import { CalendarPlus, Flag, ListChecks, RefreshCw, Shuffle, Trophy, Undo2 } from 'lucide-react';
 import { useActiveCompetition } from '@/features/competitions/CompetitionContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { EmptyState } from '@/components/ui/States';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   ACTION_LABEL,
   EventEntry,
@@ -203,8 +204,35 @@ function FixtureRow({
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState('');
   const [reason, setReason] = useState('');
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [reinstateConfirmOpen, setReinstateConfirmOpen] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const matchId = fixture.match?.id ?? null;
   const group = groups.find((entry) => entry.id === fixture.groupId);
+
+  const handleCancel = async () => {
+    if (!matchId) return;
+    setBusyAction('cancel');
+    try {
+      await fixturesApi.cancel(fixture.id);
+      onChanged(matchId);
+      setCancelConfirmOpen(false);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleReinstate = async () => {
+    if (!matchId) return;
+    setBusyAction('reinstate');
+    try {
+      await matchesApi.reinstate(matchId);
+      onChanged(matchId);
+      setReinstateConfirmOpen(false);
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   return (
     <div className={styles.entryRow}>
@@ -284,13 +312,19 @@ function FixtureRow({
             type="button"
             className="tl-btn tl-btn-sm tl-btn-danger"
             disabled={pending !== null}
-            onClick={() => void run(`cancel-fixture:${fixture.id}`, async () => {
-              await fixturesApi.cancel(fixture.id);
-              onChanged(matchId ?? undefined);
-              return 'Fixture cancelled.';
-            })}
+            onClick={() => setCancelConfirmOpen(true)}
           >
             Cancel
+          </button>
+        ) : null}
+        {canManage && fixture.status === 'cancelled' && matchId ? (
+          <button
+            type="button"
+            className="tl-btn tl-btn-sm tl-btn-primary"
+            disabled={pending !== null}
+            onClick={() => setReinstateConfirmOpen(true)}
+          >
+            <Undo2 size={14} aria-hidden /> Reinstate
           </button>
         ) : null}
         {matchId ? (
@@ -335,6 +369,29 @@ function FixtureRow({
           </div>
         </form>
       ) : null}
+
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        onClose={() => setCancelConfirmOpen(false)}
+        onConfirm={handleCancel}
+        title="Cancel match"
+        message="This will cancel the match and its fixture. The match will no longer appear in scheduled listings."
+        confirmLabel="Cancel match"
+        cancelLabel="Keep match"
+        isDestructive
+        busy={busyAction === 'cancel'}
+      />
+
+      <ConfirmDialog
+        open={reinstateConfirmOpen}
+        onClose={() => setReinstateConfirmOpen(false)}
+        onConfirm={handleReinstate}
+        title="Reinstate match"
+        message="This will restore the match to its previous scheduled state with its original kickoff time, venue, and all match details preserved."
+        confirmLabel="Reinstate match"
+        cancelLabel="Keep cancelled"
+        busy={busyAction === 'reinstate'}
+      />
 
       {open && matchId ? (
         <div className={`${styles.fullRow} ${styles.detail}`}>

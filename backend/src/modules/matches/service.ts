@@ -284,6 +284,76 @@ export async function rescheduleMatch(
   return result;
 }
 
+export async function reinstateMatch(
+  auth: AuthContext,
+  matchId: string,
+) {
+  const context = await requireMatchManage(auth, matchId);
+
+  const result = await db.transaction(async (tx) => {
+    const { match, fixture } = await lockMatch(tx, context.scope.fixtureId, matchId);
+
+    if (match.status !== 'cancelled') {
+      throw conflict('Only a cancelled match can be reinstated.');
+    }
+    if (fixture.status === 'completed' || fixture.status === 'abandoned') {
+      throw conflict(`A "${fixture.status}" fixture cannot be reinstated.`);
+    }
+    if (match.resultConfirmedAt) {
+      throw conflict('A match with a confirmed result cannot be reinstated.');
+    }
+
+    const now = new Date();
+
+    const [updatedFixture] = await tx
+      .update(fixtures)
+      .set({
+        status: 'scheduled',
+        updatedAt: now,
+      })
+      .where(eq(fixtures.id, fixture.id))
+      .returning();
+
+    const [updatedMatch] = await tx
+      .update(matches)
+      .set({
+        status: 'scheduled',
+        updatedAt: now,
+      })
+      .where(eq(matches.id, matchId))
+      .returning();
+
+    if (!updatedMatch || !updatedFixture) throw notFound('Match not found.');
+
+    await tx.insert(auditLogs).values({
+      actorUserId: auth.userId,
+      competitionId: context.scope.competitionId,
+      seasonId: context.scope.seasonId,
+      action: 'match.reinstated',
+      entityType: 'match',
+      entityId: matchId,
+      before: { match, fixture },
+      after: { match: updatedMatch, fixture: updatedFixture },
+      reason: null,
+    });
+
+    await notifyMatchParticipants(tx, matchId, {
+      type: 'match.reinstated',
+      title: 'Match reinstated',
+      body: 'The match was reinstated.',
+      entityType: 'match',
+      entityId: matchId,
+      competitionId: context.scope.competitionId,
+      dedupeKey: `match-reinstated:${matchId}:${updatedFixture.updatedAt.toISOString()}`,
+    });
+
+    return { match: updatedMatch, fixture: updatedFixture };
+  });
+
+  broadcastMatchUpdate(matchId, result.match, 'match.reinstated');
+  return result;
+}
+
 export async function updateMatchClock(
   auth: AuthContext,
   matchId: string,
