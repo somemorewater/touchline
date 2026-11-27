@@ -34,12 +34,14 @@ import { invalidateStandingsSnapshots } from '../standings/invalidation.js';
 import type { z } from 'zod';
 import type {
   matchClockSchema,
+  matchDurationUpdateSchema,
   matchLifecycleSchema,
   matchOfficialAssignSchema,
   matchOfficialUpdateSchema,
   matchReportSchema,
   matchRescheduleSchema,
   matchResultCorrectSchema,
+  matchVenueUpdateSchema,
 } from './schemas.js';
 
 type MatchLifecycle = z.infer<typeof matchLifecycleSchema>;
@@ -47,6 +49,8 @@ type MatchReschedule = z.infer<typeof matchRescheduleSchema>;
 type MatchClock = z.infer<typeof matchClockSchema>;
 type MatchReport = z.infer<typeof matchReportSchema>;
 type MatchResultCorrect = z.infer<typeof matchResultCorrectSchema>;
+type MatchVenueUpdate = z.infer<typeof matchVenueUpdateSchema>;
+type MatchDurationUpdate = z.infer<typeof matchDurationUpdateSchema>;
 type OfficialAssign = z.infer<typeof matchOfficialAssignSchema>;
 type OfficialUpdate = z.infer<typeof matchOfficialUpdateSchema>;
 
@@ -115,6 +119,8 @@ function transitionValues(
   match: typeof matches.$inferSelect,
   now: Date,
 ): Partial<typeof matches.$inferInsert> {
+  const duration = match.durationMinutes ?? 90;
+  const halfTimeMinute = Math.floor(duration / 2);
   switch (action) {
     case 'start':
       return {
@@ -127,18 +133,18 @@ function transitionValues(
     case 'half_time':
       return {
         status: 'half_time',
-        currentMinute: Math.max(match.currentMinute ?? 0, 45),
+        currentMinute: Math.max(match.currentMinute ?? 0, halfTimeMinute),
       };
     case 'second_half':
       return {
         status: 'second_half',
-        currentMinute: Math.max(match.currentMinute ?? 0, 46),
+        currentMinute: Math.max(match.currentMinute ?? 0, halfTimeMinute + 1),
       };
     case 'end':
       return {
         status: 'full_time',
         endedAt: now,
-        currentMinute: Math.max(match.currentMinute ?? 0, 90),
+        currentMinute: Math.max(match.currentMinute ?? 0, duration),
       };
     case 'postpone':
       return { status: 'postponed' };
@@ -352,6 +358,92 @@ export async function reinstateMatch(
 
   broadcastMatchUpdate(matchId, result.match, 'match.reinstated');
   return result;
+}
+
+type MatchDetailsSnapshot = {
+  match: typeof matches.$inferSelect;
+  fixture: typeof fixtures.$inferSelect;
+};
+
+/**
+ * Venue and duration describe pre-match setup. Once a match has started its
+ * recorded details must stay part of the historical record.
+ */
+function assertDetailsEditable({ match, fixture }: MatchDetailsSnapshot): void {
+  if (
+    match.startedAt ||
+    match.resultConfirmedAt ||
+    !['scheduled', 'postponed'].includes(match.status) ||
+    !['draft', 'scheduled', 'postponed'].includes(fixture.status)
+  ) {
+    throw conflict('Venue and duration can only be changed before a match starts.');
+  }
+}
+
+export async function updateMatchVenue(
+  auth: AuthContext,
+  matchId: string,
+  input: MatchVenueUpdate,
+) {
+  const context = await requireMatchManage(auth, matchId);
+  return db.transaction(async (tx) => {
+    const snapshot = await lockMatch(tx, context.scope.fixtureId, matchId);
+    assertDetailsEditable(snapshot);
+
+    const [fixture] = await tx
+      .update(fixtures)
+      .set({ venue: input.venue, updatedAt: new Date() })
+      .where(eq(fixtures.id, snapshot.fixture.id))
+      .returning();
+    if (!fixture) throw notFound('Match not found.');
+
+    await tx.insert(auditLogs).values({
+      actorUserId: auth.userId,
+      competitionId: context.scope.competitionId,
+      seasonId: context.scope.seasonId,
+      action: 'match.venue.updated',
+      entityType: 'match',
+      entityId: matchId,
+      before: { venue: snapshot.fixture.venue },
+      after: { venue: fixture.venue },
+      reason: null,
+    });
+
+    return { venue: fixture.venue };
+  });
+}
+
+export async function updateMatchDuration(
+  auth: AuthContext,
+  matchId: string,
+  input: MatchDurationUpdate,
+) {
+  const context = await requireMatchManage(auth, matchId);
+  return db.transaction(async (tx) => {
+    const snapshot = await lockMatch(tx, context.scope.fixtureId, matchId);
+    assertDetailsEditable(snapshot);
+
+    const [match] = await tx
+      .update(matches)
+      .set({ durationMinutes: input.durationMinutes, updatedAt: new Date() })
+      .where(eq(matches.id, matchId))
+      .returning();
+    if (!match) throw notFound('Match not found.');
+
+    await tx.insert(auditLogs).values({
+      actorUserId: auth.userId,
+      competitionId: context.scope.competitionId,
+      seasonId: context.scope.seasonId,
+      action: 'match.duration.updated',
+      entityType: 'match',
+      entityId: matchId,
+      before: { durationMinutes: snapshot.match.durationMinutes },
+      after: { durationMinutes: match.durationMinutes },
+      reason: null,
+    });
+
+    return { durationMinutes: match.durationMinutes };
+  });
 }
 
 export async function updateMatchClock(
@@ -708,6 +800,7 @@ export async function getMatchResult(auth: AuthContext | null, matchId: string) 
       awayScore: context.match.awayScore,
       currentMinute: context.match.currentMinute,
       addedMinutes: context.match.addedMinutes,
+      durationMinutes: context.match.durationMinutes,
       startedAt: context.match.startedAt,
       endedAt: context.match.endedAt,
       resultConfirmedAt: context.match.resultConfirmedAt,

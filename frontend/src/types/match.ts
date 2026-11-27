@@ -39,6 +39,7 @@ export interface Match {
   awayTeamId: Id;
   kickoffAt?: ISODateTime;
   venue?: string;
+  durationMinutes?: number;
   status: MatchStatus;
   /** Null until a score has been recorded. */
   score: Score | null;

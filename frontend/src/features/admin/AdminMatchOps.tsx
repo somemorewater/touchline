@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarPlus, Flag, ListChecks, RefreshCw, Shuffle, Trophy, Undo2 } from 'lucide-react';
+import { CalendarPlus, Flag, ListChecks, Pencil, RefreshCw, Shuffle, Trophy, Undo2 } from 'lucide-react';
 import { useActiveCompetition } from '@/features/competitions/CompetitionContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { EmptyState } from '@/components/ui/States';
@@ -209,6 +209,25 @@ function FixtureRow({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const matchId = fixture.match?.id ?? null;
   const group = groups.find((entry) => entry.id === fixture.groupId);
+  const detailsEditable = Boolean(
+    matchId &&
+    canManageMatches &&
+    ['scheduled', 'postponed'].includes(fixture.status) &&
+    fixture.match &&
+    ['scheduled', 'postponed'].includes(fixture.match.status) &&
+    !fixture.match.resultConfirmedAt,
+  );
+  const detailEditing = useMatchDetailEditing({
+    matchId: matchId ?? '',
+    competitionId,
+    seasonId: fixture.seasonId,
+    venue: fixture.venue,
+    durationMinutes: fixture.match?.durationMinutes ?? 90,
+    editable: detailsEditable,
+    onChanged: () => onChanged(matchId ?? undefined),
+    run,
+    pending,
+  });
 
   const handleCancel = async () => {
     if (!matchId) return;
@@ -242,7 +261,32 @@ function FixtureRow({
           {fixture.scheduledAt ? formatDateTime(fixture.scheduledAt, DISPLAY_TIME_ZONE) : 'Kick-off not set'}
           {fixture.round ? ` · Round ${fixture.round}` : ''}
           {group ? ` · ${group.name}` : ''}
-          {fixture.venue ? ` · ${fixture.venue}` : ''}
+          {' · Venue: '}{fixture.venue ?? 'To be confirmed'}
+          {detailsEditable ? (
+            <button
+              type="button"
+              className="tl-btn tl-btn-sm"
+              aria-label={`Edit venue for ${fixture.homeTeam.name} v ${fixture.awayTeam.name}`}
+              title="Edit venue"
+              disabled={pending !== null}
+              onClick={detailEditing.openVenue}
+            >
+              <Pencil size={12} aria-hidden />
+            </button>
+          ) : null}
+          {' · Duration: '}{fixture.match?.durationMinutes ?? 90} min
+          {detailsEditable ? (
+            <button
+              type="button"
+              className="tl-btn tl-btn-sm"
+              aria-label={`Edit duration for ${fixture.homeTeam.name} v ${fixture.awayTeam.name}`}
+              title="Edit duration"
+              disabled={pending !== null}
+              onClick={detailEditing.openDuration}
+            >
+              <Pencil size={12} aria-hidden />
+            </button>
+          ) : null}
         </span>
       </div>
       <div className={styles.rowActions}>
@@ -393,6 +437,8 @@ function FixtureRow({
         busy={busyAction === 'reinstate'}
       />
 
+      {matchId && detailsEditable ? detailEditing.dialogs : null}
+
       {open && matchId ? (
         <div className={`${styles.fullRow} ${styles.detail}`}>
           <MatchAdminPanel
@@ -402,6 +448,9 @@ function FixtureRow({
             canPublish={canManage || canManageMatches}
             canAssignOfficials={canAssignOfficials}
             currentUserId={currentUserId}
+            detailsEditable={detailsEditable}
+            onVenueEdit={detailEditing.openVenue}
+            onDurationEdit={detailEditing.openDuration}
             onChanged={() => onChanged(matchId)}
             onNotice={onNotice}
             run={run}
@@ -616,6 +665,163 @@ function RoundRobinPanel({
 
 /* -------------------------------- match ---------------------------------- */
 
+/**
+ * One implementation of the venue/duration dialogs. The fixture row owns the
+ * hook so its inline edit actions and the expanded match panel share state.
+ */
+function useMatchDetailEditing({
+  matchId,
+  competitionId,
+  seasonId,
+  venue,
+  durationMinutes,
+  editable,
+  onChanged,
+  run,
+  pending,
+}: {
+  matchId: string;
+  competitionId: string;
+  seasonId: string;
+  venue: string | null;
+  durationMinutes: number;
+  editable: boolean;
+  onChanged: () => void;
+  run: (key: string, task: () => Promise<string | void>) => Promise<void>;
+  pending: string | null;
+}) {
+  const [venueOpen, setVenueOpen] = useState(false);
+  const [durationOpen, setDurationOpen] = useState(false);
+  const [venueValue, setVenueValue] = useState('');
+  const [durationValue, setDurationValue] = useState('');
+
+  const venuesQ = useQuery({
+    queryKey: ['admin-match-venues', competitionId, seasonId],
+    queryFn: () => fixturesApi.list({ competitionId, seasonId }),
+    enabled: venueOpen,
+  });
+  const knownVenues = [...new Set(
+    (venuesQ.data ?? []).map((fixture) => fixture.venue).filter((value): value is string => Boolean(value)),
+  )].sort();
+
+  const dialogs = (
+    <>
+      <ConfirmDialog
+        open={venueOpen && editable}
+        onClose={() => setVenueOpen(false)}
+        onConfirm={() => {
+          void run(`match-venue:${matchId}`, async () => {
+            await matchesApi.updateVenue(matchId, venueValue.trim() || null);
+            setVenueOpen(false);
+            onChanged();
+            return 'Match venue updated.';
+          });
+        }}
+        title="Edit venue"
+        message="The updated venue will appear on the match page, match centre and fixture listings."
+        confirmLabel="Save venue"
+        busy={pending !== null}
+      >
+        <Field label="Venue" hint="Choose a known venue or enter a new one.">
+          <input
+            className="tl-input"
+            list="admin-match-venue-options"
+            maxLength={200}
+            value={venueValue}
+            onChange={(event) => setVenueValue(event.target.value)}
+          />
+        </Field>
+        <datalist id="admin-match-venue-options">
+          {knownVenues.map((known) => <option key={known} value={known} />)}
+        </datalist>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={durationOpen && editable}
+        onClose={() => setDurationOpen(false)}
+        onConfirm={() => {
+          void run(`match-duration:${matchId}`, async () => {
+            await matchesApi.updateDuration(matchId, Number(durationValue));
+            setDurationOpen(false);
+            onChanged();
+            return 'Match duration updated.';
+          });
+        }}
+        title="Edit duration"
+        message="Duration is used for half-time and full-time minutes. It cannot be changed after kick-off."
+        confirmLabel="Save duration"
+        busy={pending !== null}
+      >
+        <Field label="Duration in minutes" hint="A whole number from 10 to 120.">
+          <input
+            className="tl-input"
+            type="number"
+            min={10}
+            max={120}
+            step={1}
+            value={durationValue}
+            onChange={(event) => setDurationValue(event.target.value)}
+          />
+        </Field>
+      </ConfirmDialog>
+    </>
+  );
+
+  return {
+    openVenue: () => { setVenueValue(venue ?? ''); setVenueOpen(true); },
+    openDuration: () => { setDurationValue(String(durationMinutes)); setDurationOpen(true); },
+    dialogs,
+  };
+}
+
+function MatchDetailsEditor({
+  venue,
+  durationMinutes,
+  editable,
+  pending,
+  onVenueEdit,
+  onDurationEdit,
+}: {
+  venue: string | null;
+  durationMinutes: number;
+  editable: boolean;
+  pending: string | null;
+  onVenueEdit: () => void;
+  onDurationEdit: () => void;
+}) {
+  return (
+    <div className={styles.detail}>
+      <div className={styles.cardHead}>
+        <div>
+          <strong>Match details</strong>
+          <p className={styles.muted}>
+            Venue: {venue ?? 'To be confirmed'} · Duration: {durationMinutes} minutes
+          </p>
+        </div>
+        <div className={styles.rowActions}>
+          <button
+            type="button"
+            className="tl-btn tl-btn-sm"
+            disabled={!editable || pending !== null}
+            onClick={onVenueEdit}
+          >
+            Edit venue
+          </button>
+          <button
+            type="button"
+            className="tl-btn tl-btn-sm"
+            disabled={!editable || pending !== null}
+            onClick={onDurationEdit}
+          >
+            Edit duration
+          </button>
+        </div>
+      </div>
+      {!editable ? <p className={styles.muted}>Venue and duration are locked once a match has started or finished.</p> : null}
+    </div>
+  );
+}
+
 function MatchAdminPanel({
   matchId,
   competitionId,
@@ -623,6 +829,9 @@ function MatchAdminPanel({
   canPublish,
   canAssignOfficials,
   currentUserId,
+  detailsEditable,
+  onVenueEdit,
+  onDurationEdit,
   onChanged,
   onNotice,
   run,
@@ -634,6 +843,9 @@ function MatchAdminPanel({
   canPublish: boolean;
   canAssignOfficials: boolean;
   currentUserId: string | null;
+  detailsEditable: boolean;
+  onVenueEdit: () => void;
+  onDurationEdit: () => void;
   onChanged: () => void;
   onNotice: (message: string) => void;
   run: (key: string, task: () => Promise<string | void>) => Promise<void>;
@@ -683,6 +895,9 @@ function MatchAdminPanel({
             {matchStatusLabel(viewStatus(detail.match.status))}
             {live.state === 'open' ? ' · live connection open' : live.state === 'reconnecting' ? ' · reconnecting' : ''}
           </p>
+          <p className={styles.muted}>
+            Venue: {detail.match.fixture.venue ?? 'To be confirmed'} · Duration: {detail.match.durationMinutes} minutes
+          </p>
         </div>
         <Link className="tl-btn tl-btn-sm" href={`/matches/${matchId}`}>Open public match page</Link>
       </header>
@@ -704,6 +919,15 @@ function MatchAdminPanel({
 
       {canManage ? (
         <>
+          <MatchDetailsEditor
+            venue={detail.match.fixture.venue}
+            durationMinutes={detail.match.durationMinutes}
+            editable={detailsEditable}
+            pending={pending}
+            onVenueEdit={onVenueEdit}
+            onDurationEdit={onDurationEdit}
+          />
+
           <MatchActions
             detail={detail}
             actions={actions}

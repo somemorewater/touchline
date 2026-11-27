@@ -189,10 +189,12 @@ export const matches = pgTable('matches',{
   endedAt:timestamp('ended_at',{withTimezone:true}),
   currentMinute:integer('current_minute'),
   addedMinutes:integer('added_minutes'),
+  durationMinutes:integer('duration_minutes').notNull().default(90),
   ...timestamps
 },t=>[
   index('match_status_idx').on(t.status),
   check('match_scores_non_negative_check', sql`${t.homeScore} >= 0 and ${t.awayScore} >= 0`),
+  check('match_duration_minutes_check', sql`${t.durationMinutes} between 10 and 120`),
   check('match_times_check', sql`${t.startedAt} is null or ${t.endedAt} is null or ${t.endedAt} >= ${t.startedAt}`),
   check('match_current_minute_check', sql`${t.currentMinute} is null or ${t.currentMinute} between 0 and 150`),
   check('match_added_minutes_check', sql`${t.addedMinutes} is null or ${t.addedMinutes} between 0 and 30`),

@@ -23,6 +23,12 @@ Transitions are action endpoints, not a status field in a PATCH body. Each verif
 
 `live` remains an accepted in-play status for compatibility, but new transitions use the period names above.
 
+Half-time is at half the configured duration, the second half starts one minute later, and full-time is at the configured duration. Matches created before the duration field existed keep the default of 90 minutes.
+
+## Venue and duration
+
+`PATCH /api/v1/matches/:id/venue` updates the fixture's existing `venue` field (nullable, at most 200 characters). `PATCH /api/v1/matches/:id/duration` sets `durationMinutes` to a whole number from 10 to 120. Both require `matches.manage` in the competition (or superadmin), are rejected once the match has started or finished, and append `match.venue.updated` / `match.duration.updated` audit rows with the previous and new values. Teams, kickoff, lineups, events and results are untouched.
+
 ## Clock
 
 `PATCH /api/v1/matches/:id/clock` sets `minute` (`0..150`) and optional `addedMinutes` (`0..30`). It is explicit server state, not wall-clock derived. Updates are rejected when the match is not in play or the result is confirmed.

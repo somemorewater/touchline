@@ -192,6 +192,7 @@ export interface FixtureMatchSummaryDto {
   homeScore: number;
   awayScore: number;
   resultConfirmedAt: string | null;
+  durationMinutes: number;
 }
 
 export interface FixtureDto {
@@ -273,6 +274,7 @@ export interface MatchDetailDto {
     endedAt: string | null;
     currentMinute: number | null;
     addedMinutes: number | null;
+    durationMinutes: number;
     createdAt: string;
     updatedAt: string;
     fixture: MatchFixtureSummaryDto;
@@ -301,6 +303,7 @@ export interface MatchResultDto {
     awayScore: number;
     currentMinute: number | null;
     addedMinutes: number | null;
+    durationMinutes: number;
     startedAt: string | null;
     endedAt: string | null;
     resultConfirmedAt: string | null;

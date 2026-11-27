@@ -425,6 +425,18 @@ export const matchesApi = {
       body: {},
     });
   },
+  updateVenue(id: string, venue: string | null) {
+    return request<{ venue: string | null }>(`/matches/${id}/venue`, {
+      method: 'PATCH',
+      body: { venue },
+    });
+  },
+  updateDuration(id: string, durationMinutes: number) {
+    return request<{ durationMinutes: number }>(`/matches/${id}/duration`, {
+      method: 'PATCH',
+      body: { durationMinutes },
+    });
+  },
   reschedule(id: string, scheduledAt: string, reason?: string | null) {
     return request<unknown>(`/matches/${id}/reschedule`, {
       method: 'POST',

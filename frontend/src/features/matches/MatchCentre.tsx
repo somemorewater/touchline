@@ -106,6 +106,7 @@ export function MatchCentre({ matchId }: { matchId: string }) {
           <div><dt>Competition</dt><dd>{comp?.name ?? '…'}</dd></div>
           <div><dt>Kick-off</dt><dd>{formatDateTime(match.kickoffAt, tz)}</dd></div>
           <div><dt>Venue</dt><dd>{match.venue ?? 'To be confirmed'}</dd></div>
+          <div><dt>Duration</dt><dd>{match.durationMinutes ? `${match.durationMinutes} minutes` : '90 minutes'}</dd></div>
           {match.round ? <div><dt>Round</dt><dd>{match.round}</dd></div> : null}
           {effectiveStatus === 'full-time' && !match.resultConfirmed ? <div><dt>Result</dt><dd>Awaiting confirmation</dd></div> : null}
           {isLive(effectiveStatus) ? (

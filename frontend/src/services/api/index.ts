@@ -182,6 +182,7 @@ function toMatch(fixture: FixtureDto, competitionId: string): Match {
     awayTeamId: fixture.awayTeam.id,
     kickoffAt: fixture.scheduledAt ?? undefined,
     venue: fixture.venue ?? undefined,
+    durationMinutes: fixture.match?.durationMinutes ?? undefined,
     status,
     score: hasScore && fixture.match ? { home: fixture.match.homeScore, away: fixture.match.awayScore } : null,
     resultConfirmed: Boolean(fixture.match?.resultConfirmedAt),
@@ -463,6 +464,7 @@ export const apiServices: Services = {
             homeScore: detail.match.homeScore,
             awayScore: detail.match.awayScore,
             resultConfirmedAt: detail.match.resultConfirmedAt,
+            durationMinutes: detail.match.durationMinutes,
           },
           homeTeam: {
             id: detail.match.homeTeam?.id ?? '',

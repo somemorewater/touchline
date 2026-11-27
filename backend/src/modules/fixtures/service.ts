@@ -83,6 +83,7 @@ interface FixtureEnriched {
   homeScore: number | null;
   awayScore: number | null;
   resultConfirmedAt: Date | null;
+  durationMinutes: number | null;
 }
 
 function canManageFixtures(auth: AuthContext | null, competitionId: string): boolean {
@@ -279,6 +280,7 @@ async function enrichedFixture(fixtureId: string): Promise<FixtureEnriched> {
       homeScore: matches.homeScore,
       awayScore: matches.awayScore,
       resultConfirmedAt: matches.resultConfirmedAt,
+      durationMinutes: matches.durationMinutes,
     })
     .from(fixtures)
     .innerJoin(homeRegistrations, eq(fixtures.homeTeamRegistrationId, homeRegistrations.id))
@@ -301,6 +303,7 @@ function shapeFixture(row: FixtureEnriched) {
           homeScore: row.homeScore,
           awayScore: row.awayScore,
           resultConfirmedAt: row.resultConfirmedAt,
+          durationMinutes: row.durationMinutes ?? 90,
         }
       : null,
     homeTeam: {
@@ -497,6 +500,7 @@ export async function listFixtures(auth: AuthContext | null, filters: FixtureLis
       homeScore: matches.homeScore,
       awayScore: matches.awayScore,
       resultConfirmedAt: matches.resultConfirmedAt,
+      durationMinutes: matches.durationMinutes,
     })
     .from(fixtures)
     .innerJoin(homeRegistrations, eq(fixtures.homeTeamRegistrationId, homeRegistrations.id))

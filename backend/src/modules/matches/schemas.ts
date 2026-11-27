@@ -4,6 +4,9 @@ import { uuidSchema } from '../../shared/schema.js';
 const isoDateTime = z.iso.datetime({ offset: true });
 const reason = z.string().trim().min(1).max(2000);
 
+export const MATCH_DURATION_MIN = 10;
+export const MATCH_DURATION_MAX = 120;
+
 export const matchEventTypes = [
   'goal',
   'own-goal',
@@ -39,6 +42,18 @@ export const matchClockSchema = z
   .object({
     minute: z.number().int().min(0).max(150),
     addedMinutes: z.number().int().min(0).max(30).nullable().optional(),
+  })
+  .strict();
+
+export const matchVenueUpdateSchema = z
+  .object({
+    venue: z.string().trim().max(200).nullable(),
+  })
+  .strict();
+
+export const matchDurationUpdateSchema = z
+  .object({
+    durationMinutes: z.number().int().min(MATCH_DURATION_MIN).max(MATCH_DURATION_MAX),
   })
   .strict();
 

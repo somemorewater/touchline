@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import styles from './ConfirmDialog.module.css';
 
 interface ConfirmDialogProps {
@@ -9,6 +10,7 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   title: string;
   message: string;
+  children?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   isDestructive?: boolean;
@@ -21,6 +23,7 @@ export function ConfirmDialog({
   onConfirm,
   title,
   message,
+  children,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   isDestructive = false,
@@ -70,6 +73,7 @@ export function ConfirmDialog({
           </button>
         </header>
         <p className={styles.message}>{message}</p>
+        {children}
         <footer className={styles.actions}>
           <button type="button" className="tl-btn" onClick={handleClose} disabled={busy}>
             {cancelLabel}

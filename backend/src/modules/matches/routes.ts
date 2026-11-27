@@ -28,6 +28,7 @@ import type { AuthContext } from '../../security/context.js';
 import { requireAuth } from '../../security/plugin.js';
 import {
   matchClockSchema,
+  matchDurationUpdateSchema,
   matchEventCorrectSchema,
   matchEventCreateSchema,
   matchEventVoidSchema,
@@ -38,6 +39,7 @@ import {
   matchReportSchema,
   matchRescheduleSchema,
   matchResultCorrectSchema,
+  matchVenueUpdateSchema,
 } from './schemas.js';
 import {
   assignMatchOfficial,
@@ -52,7 +54,9 @@ import {
   submitMatchReport,
   transitionMatch,
   updateMatchClock,
+  updateMatchDuration,
   updateMatchOfficial,
+  updateMatchVenue,
 } from './service.js';
 import {
   correctMatchEvent,
@@ -99,6 +103,7 @@ const matchColumns = {
   endedAt: matches.endedAt,
   currentMinute: matches.currentMinute,
   addedMinutes: matches.addedMinutes,
+  durationMinutes: matches.durationMinutes,
   createdAt: matches.createdAt,
   updatedAt: matches.updatedAt,
 };
@@ -516,6 +521,48 @@ export async function matchRoutes(app: FastifyInstance) {
       return ok(
         reply,
         await reinstateMatch(requireAuth(req), id),
+      );
+    },
+  );
+
+  app.patch(
+    '/matches/:id/venue',
+    {
+      preHandler: app.authenticate,
+      schema: {
+        ...secure,
+        summary: 'Change the venue of a scheduled match',
+        params: idParamsSchema.params,
+        body: jsonSchema(matchVenueUpdateSchema),
+        response: { ...successResponse(), ...errorResponse },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      return ok(
+        reply,
+        await updateMatchVenue(requireAuth(req), id, matchVenueUpdateSchema.parse(req.body)),
+      );
+    },
+  );
+
+  app.patch(
+    '/matches/:id/duration',
+    {
+      preHandler: app.authenticate,
+      schema: {
+        ...secure,
+        summary: 'Change the scheduled duration of a match',
+        params: idParamsSchema.params,
+        body: jsonSchema(matchDurationUpdateSchema),
+        response: { ...successResponse(), ...errorResponse },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      return ok(
+        reply,
+        await updateMatchDuration(requireAuth(req), id, matchDurationUpdateSchema.parse(req.body)),
       );
     },
   );

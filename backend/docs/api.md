@@ -130,6 +130,8 @@ OpenAPI UI is `/docs`. Path parameters shown as `:id` must be UUIDs; otherwise t
 | POST | `/api/v1/matches/:id/cancel` | reporting authority | Never-started match → `cancelled` |
 | POST | `/api/v1/matches/:id/abandon` | reporting authority | In-play match → `abandoned` |
 | POST | `/api/v1/matches/:id/reschedule` | reporting authority | New kickoff for a scheduled/postponed match |
+| PATCH | `/api/v1/matches/:id/venue` | `matches.manage` | Audited venue change on the underlying fixture; before kickoff only |
+| PATCH | `/api/v1/matches/:id/duration` | `matches.manage` | Audited whole-number duration (`10..120`); before kickoff only |
 | PATCH | `/api/v1/matches/:id/clock` | reporting authority | Explicit `minute` + optional `addedMinutes` |
 | GET | `/api/v1/matches/:id/result` | public, optionally private | Persisted and derived score plus event snapshot |
 | POST | `/api/v1/matches/:id/report` | reporting authority | Full-time result submission; confirms the derived score |
