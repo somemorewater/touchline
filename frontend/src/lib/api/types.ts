@@ -194,6 +194,10 @@ export interface FixtureMatchSummaryDto {
   awayScore: number;
   resultConfirmedAt: string | null;
   durationMinutes: number;
+  clockRunningAt?: string | null;
+  clockAccumulatedSeconds?: number;
+  currentMinute?: number | null;
+  addedMinutes?: number | null;
 }
 
 export interface FixtureDto {
@@ -276,6 +280,26 @@ export interface MatchOverviewDto {
   updatedAt: string;
 }
 
+export interface MatchSquadPlayerDto {
+  registrationId: string;
+  playerId: string;
+  fullName: string;
+  shirtNumber: number | null;
+  position: string | null;
+  teamRegistrationId: string;
+  teamName: string;
+  eligible: boolean;
+  lineupRole: 'starter' | 'substitute' | 'unavailable' | null;
+  inLineup: boolean;
+}
+
+export interface MatchSquadDto {
+  homeRegistrationId: string;
+  awayRegistrationId: string;
+  hasLineup: boolean;
+  players: MatchSquadPlayerDto[];
+}
+
 export interface MatchFixtureSummaryDto {
   id: string;
   seasonId: string;
@@ -305,6 +329,8 @@ export interface MatchDetailDto {
     currentMinute: number | null;
     addedMinutes: number | null;
     durationMinutes: number;
+    clockRunningAt: string | null;
+    clockAccumulatedSeconds: number;
     createdAt: string;
     updatedAt: string;
     fixture: MatchFixtureSummaryDto;
@@ -334,6 +360,8 @@ export interface MatchResultDto {
     currentMinute: number | null;
     addedMinutes: number | null;
     durationMinutes: number;
+    clockRunningAt: string | null;
+    clockAccumulatedSeconds: number;
     startedAt: string | null;
     endedAt: string | null;
     resultConfirmedAt: string | null;
@@ -791,6 +819,9 @@ export interface LiveMatchUpdate {
     status: MatchStatus;
     currentMinute: number | null;
     addedMinutes: number | null;
+    durationMinutes?: number;
+    clockRunningAt?: string | null;
+    clockAccumulatedSeconds?: number;
     homeScore: number;
     awayScore: number;
     resultConfirmedAt: string | null;

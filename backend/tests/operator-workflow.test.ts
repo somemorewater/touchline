@@ -109,12 +109,21 @@ if (!databaseUrl) {
     }
     const { db } = await import('../src/database/client.js');
     const schema = await import('../src/database/schema/index.js');
-    const [player] = await db.insert(schema.players).values({ fullName: unique('Scorer') }).returning({ id: schema.players.id });
+    const [player] = await db.insert(schema.players).values({ fullName: unique('Home Scorer') }).returning({ id: schema.players.id });
     const [playerRegistration] = await db.insert(schema.playerRegistrations).values({
       playerId: player!.id,
       teamRegistrationId: registrationIds[0]!,
       seasonId,
       shirtNumber: 10,
+      status: 'approved',
+      eligibilityApproved: true,
+    }).returning({ id: schema.playerRegistrations.id });
+    const [awayPlayer] = await db.insert(schema.players).values({ fullName: unique('Away Scorer') }).returning({ id: schema.players.id });
+    const [awayRegistration] = await db.insert(schema.playerRegistrations).values({
+      playerId: awayPlayer!.id,
+      teamRegistrationId: registrationIds[1]!,
+      seasonId,
+      shirtNumber: 9,
       status: 'approved',
       eligibilityApproved: true,
     }).returning({ id: schema.playerRegistrations.id });
@@ -133,7 +142,9 @@ if (!databaseUrl) {
     await http('POST', `/api/v1/fixtures/${data.fixture.id}/publish`, { token: admin.token, payload: {} });
     return {
       admin, competitionId, otherCompetitionId, seasonId,
-      matchId: data.match.id, registrationIds, playerRegistrationId: playerRegistration!.id,
+      matchId: data.match.id, registrationIds,
+      playerRegistrationId: playerRegistration!.id,
+      awayPlayerRegistrationId: awayRegistration!.id,
     };
   }
 
@@ -384,5 +395,75 @@ if (!databaseUrl) {
       token: operator.token, payload: { body: 'Should be rejected' },
     });
     expect([403, 404]).toContain(revoked.statusCode);
+  });
+
+  it('serves match players by team and keeps a server-authoritative running clock', async () => {
+    const world = await createWorld();
+    const operator = await createUserWithRole(
+      `${unique('clock-operator')}@example.test`, 'commentary_operator', world.competitionId,
+    );
+    const assigned = await http('POST', `/api/v1/matches/${world.matchId}/officials`, {
+      token: world.admin.token,
+      payload: { userId: operator.id, role: 'commentary' },
+    });
+    expect(assigned.statusCode).toBe(201);
+
+    const squad = await http('GET', `/api/v1/matches/${world.matchId}/squad`, { token: operator.token });
+    expect(squad.statusCode).toBe(200);
+    const squadData = squad.json().data as {
+      homeRegistrationId: string;
+      awayRegistrationId: string;
+      players: { registrationId: string; teamRegistrationId: string; fullName: string; shirtNumber: number | null }[];
+    };
+    expect(squadData.players).toHaveLength(2);
+    expect(squadData.players.find((p) => p.registrationId === world.playerRegistrationId))
+      .toMatchObject({ teamRegistrationId: squadData.homeRegistrationId, shirtNumber: 10 });
+    expect(squadData.players.find((p) => p.registrationId === world.awayPlayerRegistrationId))
+      .toMatchObject({ teamRegistrationId: squadData.awayRegistrationId, shirtNumber: 9 });
+
+    const start = await http('POST', `/api/v1/matches/${world.matchId}/start`, { token: operator.token, payload: {} });
+    expect(start.statusCode).toBe(200);
+    const startedMatch = (start.json().data as { match: { clockRunningAt: string | null; clockAccumulatedSeconds: number } }).match;
+    expect(startedMatch.clockRunningAt).not.toBeNull();
+    expect(startedMatch.clockAccumulatedSeconds).toBe(0);
+
+    const corrected = await http('PATCH', `/api/v1/matches/${world.matchId}/clock`, {
+      token: operator.token, payload: { minute: 10, addedMinutes: null },
+    });
+    expect(corrected.statusCode).toBe(200);
+    const correctedMatch = corrected.json().data as { clockAccumulatedSeconds: number };
+    expect(correctedMatch.clockAccumulatedSeconds).toBe(600);
+
+    const half = await http('POST', `/api/v1/matches/${world.matchId}/half-time`, { token: operator.token, payload: {} });
+    expect(half.statusCode).toBe(200);
+    const halfMatch = (half.json().data as { match: { clockRunningAt: string | null; clockAccumulatedSeconds: number } }).match;
+    expect(halfMatch.clockRunningAt).toBeNull();
+    expect(halfMatch.clockAccumulatedSeconds).toBeGreaterThanOrEqual(600);
+
+    const second = await http('POST', `/api/v1/matches/${world.matchId}/second-half`, { token: operator.token, payload: {} });
+    expect(second.statusCode).toBe(200);
+    const secondMatch = (second.json().data as { match: { clockRunningAt: string | null; clockAccumulatedSeconds: number } }).match;
+    expect(secondMatch.clockRunningAt).not.toBeNull();
+    expect(secondMatch.clockAccumulatedSeconds).toBe(halfMatch.clockAccumulatedSeconds);
+
+    const ownGoal = await http('POST', `/api/v1/matches/${world.matchId}/events`, {
+      token: operator.token,
+      payload: {
+        clientEventId: randomUUID(), eventType: 'own-goal',
+        teamRegistrationId: world.registrationIds[1],
+        playerRegistrationId: world.awayPlayerRegistrationId,
+        minute: 20,
+      },
+    });
+    expect(ownGoal.statusCode).toBe(201);
+    const result = await http('GET', `/api/v1/matches/${world.matchId}/result`, { token: operator.token });
+    expect((result.json().data as { derivedScore: { homeScore: number; awayScore: number } }).derivedScore)
+      .toEqual({ homeScore: 1, awayScore: 0 });
+
+    const end = await http('POST', `/api/v1/matches/${world.matchId}/end`, { token: operator.token, payload: {} });
+    expect(end.statusCode).toBe(200);
+    const endedMatch = (end.json().data as { match: { clockRunningAt: string | null; clockAccumulatedSeconds: number } }).match;
+    expect(endedMatch.clockRunningAt).toBeNull();
+    expect(endedMatch.clockAccumulatedSeconds).toBe(90 * 60);
   });
 }

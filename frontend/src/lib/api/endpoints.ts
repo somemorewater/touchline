@@ -25,6 +25,7 @@ import type {
   MatchOverviewDto,
   MatchOfficialDto,
   MatchResultDto,
+  MatchSquadDto,
   MatchStatisticsDto,
   NotificationDto,
   Paginated,
@@ -375,6 +376,9 @@ export const matchesApi = {
   },
   events(id: string) {
     return request<MatchEventDto[]>(`/matches/${id}/events`, {});
+  },
+  squad(id: string) {
+    return request<MatchSquadDto>(`/matches/${id}/squad`);
   },
   createEvent(
     id: string,

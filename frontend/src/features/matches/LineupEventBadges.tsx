@@ -1,4 +1,5 @@
-import { ArrowDown, ArrowRightLeft, ArrowUp, Bandage, Footprints, Goal } from 'lucide-react';
+import { ArrowDown, ArrowRightLeft, ArrowUp, Bandage, Footprints } from 'lucide-react';
+import { FootballIcon } from '@/components/ui/FootballIcon';
 import type { LineupEvent, LineupEventKind } from './lib/lineupEvents';
 import styles from './Lineups.module.css';
 
@@ -17,7 +18,7 @@ function EventIcon({ kind }: { kind: LineupEventKind }) {
   switch (kind) {
     case 'goal':
     case 'own-goal':
-      return <Goal size={11} aria-hidden />;
+      return <FootballIcon />;
     case 'assist':
       return <Footprints size={11} aria-hidden />;
     case 'yellow':
@@ -55,7 +56,7 @@ export function EventBadges({ events, compact = false }: { events: LineupEvent[]
 export function EventLegend() {
   return (
     <div className={styles.legend} aria-label="Match event legend">
-      <span><Goal size={12} aria-hidden /> Goal</span>
+      <span><FootballIcon size={12} /> Goal</span>
       <span><Footprints size={12} aria-hidden /> Assist</span>
       <span><span className={`${styles.cardIcon} ${styles.yellowCard}`} aria-hidden /> Yellow card</span>
       <span><span className={`${styles.cardIcon} ${styles.redCard}`} aria-hidden /> Red card</span>

@@ -85,6 +85,10 @@ interface FixtureEnriched {
   awayScore: number | null;
   resultConfirmedAt: Date | null;
   durationMinutes: number | null;
+  clockRunningAt: Date | null;
+  clockAccumulatedSeconds: number | null;
+  currentMinute: number | null;
+  addedMinutes: number | null;
 }
 
 function canManageFixtures(auth: AuthContext | null, competitionId: string): boolean {
@@ -282,6 +286,10 @@ async function enrichedFixture(fixtureId: string): Promise<FixtureEnriched> {
       awayScore: matches.awayScore,
       resultConfirmedAt: matches.resultConfirmedAt,
       durationMinutes: matches.durationMinutes,
+      clockRunningAt: matches.clockRunningAt,
+      clockAccumulatedSeconds: matches.clockAccumulatedSeconds,
+      currentMinute: matches.currentMinute,
+      addedMinutes: matches.addedMinutes,
     })
     .from(fixtures)
     .innerJoin(homeRegistrations, eq(fixtures.homeTeamRegistrationId, homeRegistrations.id))
@@ -305,6 +313,10 @@ function shapeFixture(row: FixtureEnriched) {
           awayScore: row.awayScore,
           resultConfirmedAt: row.resultConfirmedAt,
           durationMinutes: row.durationMinutes ?? 90,
+          clockRunningAt: row.clockRunningAt,
+          clockAccumulatedSeconds: row.clockAccumulatedSeconds ?? 0,
+          currentMinute: row.currentMinute,
+          addedMinutes: row.addedMinutes,
         }
       : null,
     homeTeam: {
@@ -529,6 +541,10 @@ export async function listFixtures(auth: AuthContext | null, filters: FixtureLis
       awayScore: matches.awayScore,
       resultConfirmedAt: matches.resultConfirmedAt,
       durationMinutes: matches.durationMinutes,
+      clockRunningAt: matches.clockRunningAt,
+      clockAccumulatedSeconds: matches.clockAccumulatedSeconds,
+      currentMinute: matches.currentMinute,
+      addedMinutes: matches.addedMinutes,
     })
     .from(fixtures)
     .innerJoin(homeRegistrations, eq(fixtures.homeTeamRegistrationId, homeRegistrations.id))

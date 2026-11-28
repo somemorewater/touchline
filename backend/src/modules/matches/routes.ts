@@ -25,6 +25,7 @@ import {
   type MatchScope,
 } from '../../security/access.js';
 import type { AuthContext } from '../../security/context.js';
+import { listMatchSquad } from './squad.js';
 import { requireAuth } from '../../security/plugin.js';
 import {
   matchClockSchema,
@@ -106,6 +107,8 @@ const matchColumns = {
   currentMinute: matches.currentMinute,
   addedMinutes: matches.addedMinutes,
   durationMinutes: matches.durationMinutes,
+  clockRunningAt: matches.clockRunningAt,
+  clockAccumulatedSeconds: matches.clockAccumulatedSeconds,
   createdAt: matches.createdAt,
   updatedAt: matches.updatedAt,
 };
@@ -264,6 +267,23 @@ export async function matchRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       return ok(reply, await listMatchEvents(req.auth, id));
+    },
+  );
+
+  app.get(
+    '/matches/:id/squad',
+    {
+      preHandler: app.authenticateOptional,
+      schema: {
+        ...secure,
+        summary: 'List eligible players for both match participants',
+        ...idParamsSchema,
+        response: { ...successResponse(), ...errorResponse },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      return ok(reply, await listMatchSquad(req.auth ?? null, id));
     },
   );
 

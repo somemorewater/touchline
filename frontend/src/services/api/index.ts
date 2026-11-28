@@ -183,6 +183,10 @@ function toMatch(fixture: FixtureDto, competitionId: string): Match {
     kickoffAt: fixture.scheduledAt ?? undefined,
     venue: fixture.venue ?? undefined,
     durationMinutes: fixture.match?.durationMinutes ?? undefined,
+    clockRunningAt: fixture.match?.clockRunningAt ?? null,
+    clockAccumulatedSeconds: fixture.match?.clockAccumulatedSeconds ?? 0,
+    addedMinutes: fixture.match?.addedMinutes ?? null,
+    currentMinute: fixture.match?.currentMinute ?? null,
     status,
     score: hasScore && fixture.match ? { home: fixture.match.homeScore, away: fixture.match.awayScore } : null,
     resultConfirmed: Boolean(fixture.match?.resultConfirmedAt),
@@ -191,17 +195,26 @@ function toMatch(fixture: FixtureDto, competitionId: string): Match {
 
 const EVENT_TYPE: Record<string, MatchEvent['type']> = {
   goal: 'goal',
+  'own-goal': 'own-goal',
   own_goal: 'own-goal',
+  'yellow-card': 'yellow-card',
   yellow_card: 'yellow-card',
+  'second-yellow': 'second-yellow',
   second_yellow: 'second-yellow',
+  'red-card': 'red-card',
   red_card: 'red-card',
   substitution: 'substitution',
   injury: 'injury',
+  'penalty-awarded': 'penalty-awarded',
   penalty_awarded: 'penalty-awarded',
+  'penalty-scored': 'penalty-scored',
   penalty_scored: 'penalty-scored',
+  'penalty-missed': 'penalty-missed',
   penalty_missed: 'penalty-missed',
   kickoff: 'kickoff',
+  'half-time': 'half-time',
   half_time: 'half-time',
+  'full-time': 'full-time',
   full_time: 'full-time',
 };
 
@@ -214,7 +227,7 @@ function toEvent(
   if (!type) return null;
   const teamId = dto.teamRegistrationId ? registrationTeam.get(dto.teamRegistrationId) ?? '' : '';
   const playerId = dto.playerRegistrationId
-    ? registrationPlayer.get(dto.playerRegistrationId) ?? dto.playerRegistrationId
+    ? registrationPlayer.get(dto.playerRegistrationId) ?? undefined
     : undefined;
   const base = {
     id: dto.id,
@@ -231,10 +244,10 @@ function toEvent(
       ...base,
       type,
       playerOffId: dto.playerRegistrationId
-        ? registrationPlayer.get(dto.playerRegistrationId) ?? dto.playerRegistrationId
+        ? registrationPlayer.get(dto.playerRegistrationId) ?? ''
         : '',
       playerOnId: dto.secondaryPlayerRegistrationId
-        ? registrationPlayer.get(dto.secondaryPlayerRegistrationId) ?? dto.secondaryPlayerRegistrationId
+        ? registrationPlayer.get(dto.secondaryPlayerRegistrationId) ?? ''
         : '',
     };
   }
@@ -448,10 +461,19 @@ export const apiServices: Services = {
         registrationTeam.set(detail.match.awayRegistration.id, detail.match.awayTeam?.id ?? '');
       }
 
-      const index = await loadRegistrationIndex(competitionId, seasonId);
+      // The squad endpoint is readable by public match viewers, so it is the
+      // reliable registration→player source on both public and signed-in pages.
+      const squad = await matchesApi.squad(matchId).catch(() => null);
       const registrationPlayer = new Map<string, string>();
-      for (const [registrationId, player] of index.byRegistration) {
-        registrationPlayer.set(registrationId, player.id);
+      if (squad) {
+        for (const entry of squad.players) {
+          registrationPlayer.set(entry.registrationId, entry.playerId);
+        }
+      } else {
+        const index = await loadRegistrationIndex(competitionId, seasonId);
+        for (const [registrationId, player] of index.byRegistration) {
+          registrationPlayer.set(registrationId, player.id);
+        }
       }
 
       const match = toMatch(
@@ -465,6 +487,10 @@ export const apiServices: Services = {
             awayScore: detail.match.awayScore,
             resultConfirmedAt: detail.match.resultConfirmedAt,
             durationMinutes: detail.match.durationMinutes,
+            clockRunningAt: detail.match.clockRunningAt,
+            clockAccumulatedSeconds: detail.match.clockAccumulatedSeconds,
+            currentMinute: detail.match.currentMinute,
+            addedMinutes: detail.match.addedMinutes,
           },
           homeTeam: {
             id: detail.match.homeTeam?.id ?? '',

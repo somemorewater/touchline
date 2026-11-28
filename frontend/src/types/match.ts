@@ -40,6 +40,10 @@ export interface Match {
   kickoffAt?: ISODateTime;
   venue?: string;
   durationMinutes?: number;
+  clockRunningAt?: string | null;
+  clockAccumulatedSeconds?: number;
+  addedMinutes?: number | null;
+  currentMinute?: number | null;
   status: MatchStatus;
   /** Null until a score has been recorded. */
   score: Score | null;

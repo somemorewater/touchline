@@ -9,12 +9,13 @@ import { Tabs } from '@/components/ui/Tabs';
 import { useCompetition } from '@/features/competitions/hooks';
 import { usePlayers } from '@/features/players/hooks';
 import { useTeamMap } from '@/features/teams/hooks';
-import { commentaryApi } from '@/lib/api/endpoints';
+import { commentaryApi, matchesApi } from '@/lib/api/endpoints';
 import { formatDateTime } from '@/lib/format';
 import { isLive, statusLabel } from '@/lib/match';
 import { DISPLAY_TIME_ZONE } from '@/types';
-import type { MatchEvent, MatchStatus, MatchTeamStats } from '@/types';
+import type { MatchEvent, MatchStatus, MatchTeamStats, Player } from '@/types';
 import { useMatchDetail } from './hooks';
+import { formatClock, useMatchClock } from './useMatchClock';
 import { MatchLineups } from './MatchLineups';
 import { useMatchLive, type LiveConnectionState } from './useMatchLive';
 import styles from './MatchCentre.module.css';
@@ -45,7 +46,30 @@ export function MatchCentre({ matchId }: { matchId: string }) {
   const compQ = useCompetition(q.data?.match.competitionId ?? '');
   const { teams } = useTeamMap(q.data?.match.competitionId, q.data?.match.seasonId);
   const playersQ = usePlayers({ competitionId: q.data?.match.competitionId });
-  const players = new Map((playersQ.data ?? []).map((p) => [p.id, p]));
+  const squadQ = useQuery({
+    queryKey: ['match-squad', matchId],
+    queryFn: () => matchesApi.squad(matchId),
+    enabled: Boolean(matchId),
+  });
+  const rosterPlayers = new Map((playersQ.data ?? []).map((p) => [p.id, p]));
+  // The public squad endpoint supplies names for players that statistics or
+  // protected registration lists cannot expose to anonymous viewers.
+  const squadPlayers = new Map<string, Player>();
+  for (const entry of squadQ.data?.players ?? []) {
+    const teamId = squadQ.data?.homeRegistrationId === entry.teamRegistrationId
+      ? q.data?.match.homeTeamId
+      : squadQ.data?.awayRegistrationId === entry.teamRegistrationId
+        ? q.data?.match.awayTeamId
+        : undefined;
+    squadPlayers.set(entry.playerId, {
+      id: entry.playerId,
+      fullName: entry.fullName,
+      teamId: teamId ?? '',
+      shirtNumber: entry.shirtNumber ?? undefined,
+      squadStatus: 'approved',
+    });
+  }
+  const players = new Map<string, Player>([...rosterPlayers, ...squadPlayers]);
   const commentaryQ = useQuery({
     queryKey: ['match-commentary', matchId],
     queryFn: () => commentaryApi.list(matchId),
@@ -55,6 +79,14 @@ export function MatchCentre({ matchId }: { matchId: string }) {
     queryKey: ['match-overview', matchId],
     queryFn: () => commentaryApi.overview(matchId),
   });
+  const clockSource = {
+    status: live.update?.match.status ?? q.data?.match.status ?? 'scheduled',
+    clockRunningAt: live.update?.match.clockRunningAt ?? q.data?.match.clockRunningAt ?? null,
+    clockAccumulatedSeconds: live.update?.match.clockAccumulatedSeconds ?? q.data?.match.clockAccumulatedSeconds ?? 0,
+    addedMinutes: live.update?.match.addedMinutes ?? q.data?.match.addedMinutes ?? null,
+    currentMinute: live.update?.match.currentMinute ?? q.data?.match.currentMinute ?? 0,
+  };
+  const clockSecondsValue = useMatchClock(clockSource);
 
   if (q.isLoading) return <Skeleton lines={3} height={90} />;
   if (q.isError) return <ErrorState title="Could not load this match" onRetry={() => void q.refetch()} />;
@@ -65,7 +97,7 @@ export function MatchCentre({ matchId }: { matchId: string }) {
   const tz = DISPLAY_TIME_ZONE;
   const home = teams.get(match.homeTeamId)?.name ?? 'Home team';
   const away = teams.get(match.awayTeamId)?.name ?? 'Away team';
-  const player = (id?: string) => (id ? players.get(id)?.fullName ?? id : undefined);
+  const player = (id?: string) => (id ? players.get(id)?.fullName ?? undefined : undefined);
   const timeline = [...events].sort((a, b) => a.minute - b.minute);
   const teamName = (id: string) => (id === match.homeTeamId ? home : away);
   const editorial = commentaryQ.data ?? [];
@@ -94,8 +126,8 @@ export function MatchCentre({ matchId }: { matchId: string }) {
   const effectiveStatus = liveStatus ?? match.status;
   const effectiveScore = liveFrame ? { home: liveFrame.homeScore, away: liveFrame.awayScore } : match.score;
   const showScore = effectiveScore !== null && effectiveStatus !== 'scheduled';
-  const minute = liveFrame?.currentMinute ?? null;
-  const added = liveFrame?.addedMinutes ?? null;
+  const minute = liveFrame?.currentMinute ?? match.currentMinute ?? null;
+  const showClock = isLive(effectiveStatus) || clockSource.clockRunningAt !== null || clockSecondsValue > 0;
   const noLineupStatus = effectiveStatus === 'postponed' || effectiveStatus === 'cancelled' || effectiveStatus === 'abandoned';
   const lineupEmptyTitle = noLineupStatus ? `Match ${statusLabel(effectiveStatus).toLowerCase()}` : 'Lineups not published';
   const lineupEmptyBody = noLineupStatus
@@ -141,8 +173,8 @@ export function MatchCentre({ matchId }: { matchId: string }) {
         <div className={styles.mid}>
           <div className={`${styles.score} num`}>{showScore ? `${effectiveScore!.home} – ${effectiveScore!.away}` : 'v'}</div>
           <StatusBadge status={effectiveStatus} />
-          {isLive(effectiveStatus) && minute !== null ? (
-            <span className={styles.clock}>{minute}{added ? `+${added}` : ''}&apos;</span>
+          {showClock && minute !== null ? (
+            <span className={styles.clock}>{formatClock(clockSecondsValue)}</span>
           ) : null}
         </div>
         <div className={styles.team}><Crest name={away} size={56} /><span>{away}</span></div>

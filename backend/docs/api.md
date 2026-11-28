@@ -113,6 +113,7 @@ OpenAPI UI is `/docs`. Path parameters shown as `:id` must be UUIDs; otherwise t
 | POST | `/api/v1/fixtures/:id/reschedule` | fixture manager | New kickoff; reopens a postponed fixture |
 | POST | `/api/v1/fixtures/:id/cancel` | fixture manager | Cancels fixture and match before kickoff |
 | GET | `/api/v1/matches/:id` | public, optionally private | Private matches require scope/official/captain access |
+| GET | `/api/v1/matches/:id/squad` | match reader / operator | Approved, eligible players for both teams with shirt numbers and lineup roles |
 | GET | `/api/v1/matches/:id/events` | public, optionally private | Voided events hidden from non-managing readers |
 | GET | `/api/v1/matches/:id/events/:eventId` | public, optionally private | Same visibility as the event list |
 | POST | `/api/v1/matches/:id/events` | reporting authority | Idempotent on `clientEventId`; `201` created, `200` replay |

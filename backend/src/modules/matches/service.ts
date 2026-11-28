@@ -113,6 +113,12 @@ const TRANSITIONS: Record<MatchAction, TransitionDefinition> = {
   },
 };
 
+function elapsedSeconds(match: typeof matches.$inferSelect, now: Date): number {
+  const accumulated = match.clockAccumulatedSeconds ?? 0;
+  if (!match.clockRunningAt) return accumulated;
+  return accumulated + Math.max(0, Math.floor((now.getTime() - match.clockRunningAt.getTime()) / 1000));
+}
+
 function transitionValues(
   action: MatchAction,
   match: typeof matches.$inferSelect,
@@ -120,6 +126,7 @@ function transitionValues(
 ): Partial<typeof matches.$inferInsert> {
   const duration = match.durationMinutes ?? 90;
   const halfTimeMinute = Math.floor(duration / 2);
+  const elapsed = Math.floor(elapsedSeconds(match, now) / 60);
   switch (action) {
     case 'start':
       return {
@@ -128,29 +135,46 @@ function transitionValues(
         endedAt: null,
         currentMinute: 0,
         addedMinutes: 0,
+        clockRunningAt: now,
+        clockAccumulatedSeconds: 0,
       };
-    case 'half_time':
+    case 'half_time': {
+      const minute = Math.max(match.currentMinute ?? 0, halfTimeMinute, elapsed);
       return {
         status: 'half_time',
-        currentMinute: Math.max(match.currentMinute ?? 0, halfTimeMinute),
+        currentMinute: minute,
+        clockRunningAt: null,
+        clockAccumulatedSeconds: minute * 60,
       };
+    }
     case 'second_half':
       return {
         status: 'second_half',
         currentMinute: Math.max(match.currentMinute ?? 0, halfTimeMinute + 1),
+        clockRunningAt: now,
+        clockAccumulatedSeconds: match.clockAccumulatedSeconds ?? halfTimeMinute * 60,
       };
-    case 'end':
+    case 'end': {
+      const minute = Math.max(match.currentMinute ?? 0, duration, elapsed);
       return {
         status: 'full_time',
         endedAt: now,
-        currentMinute: Math.max(match.currentMinute ?? 0, duration),
+        currentMinute: minute,
+        clockRunningAt: null,
+        clockAccumulatedSeconds: minute * 60,
       };
+    }
     case 'postpone':
-      return { status: 'postponed' };
+      return { status: 'postponed', clockRunningAt: null };
     case 'cancel':
-      return { status: 'cancelled' };
+      return { status: 'cancelled', clockRunningAt: null };
     case 'abandon':
-      return { status: 'abandoned', endedAt: now };
+      return {
+        status: 'abandoned',
+        endedAt: now,
+        clockRunningAt: null,
+        clockAccumulatedSeconds: elapsedSeconds(match, now),
+      };
     default:
       return {};
   }
@@ -460,16 +484,42 @@ export async function updateMatchClock(
     if (match.resultConfirmedAt) {
       throw conflict('The match result is already confirmed.');
     }
+    const now = new Date();
     const [updated] = await tx
       .update(matches)
       .set({
         currentMinute: input.minute,
         addedMinutes: input.addedMinutes ?? null,
-        updatedAt: new Date(),
+        // A correction re-bases the running period; time already played in
+        // this period is replaced by the authoritative corrected value.
+        clockRunningAt: match.clockRunningAt ? now : null,
+        clockAccumulatedSeconds: input.minute * 60,
+        updatedAt: now,
       })
       .where(eq(matches.id, matchId))
       .returning();
     if (!updated) throw notFound('Match not found.');
+    await tx.insert(auditLogs).values({
+      actorUserId: auth.userId,
+      competitionId: context.scope.competitionId,
+      seasonId: context.scope.seasonId,
+      action: 'match.clock.updated',
+      entityType: 'match',
+      entityId: matchId,
+      before: {
+        currentMinute: match.currentMinute,
+        addedMinutes: match.addedMinutes,
+        clockRunningAt: match.clockRunningAt,
+        clockAccumulatedSeconds: match.clockAccumulatedSeconds,
+      },
+      after: {
+        currentMinute: updated.currentMinute,
+        addedMinutes: updated.addedMinutes,
+        clockRunningAt: updated.clockRunningAt,
+        clockAccumulatedSeconds: updated.clockAccumulatedSeconds,
+      },
+      reason: null,
+    });
     return updated;
   });
 
@@ -834,6 +884,8 @@ export async function getMatchResult(auth: AuthContext | null, matchId: string) 
       currentMinute: context.match.currentMinute,
       addedMinutes: context.match.addedMinutes,
       durationMinutes: context.match.durationMinutes,
+      clockRunningAt: context.match.clockRunningAt,
+      clockAccumulatedSeconds: context.match.clockAccumulatedSeconds,
       startedAt: context.match.startedAt,
       endedAt: context.match.endedAt,
       resultConfirmedAt: context.match.resultConfirmedAt,

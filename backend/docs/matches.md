@@ -31,7 +31,9 @@ Half-time is at half the configured duration, the second half starts one minute 
 
 ## Clock
 
-`PATCH /api/v1/matches/:id/clock` sets `minute` (`0..150`) and optional `addedMinutes` (`0..30`). It is explicit server state, not wall-clock derived. Updates are rejected when the match is not in play or the result is confirmed.
+`PATCH /api/v1/matches/:id/clock` sets `minute` (`0..150`) and optional `addedMinutes` (`0..30`). It is explicit server state, not wall-clock derived. Updates are rejected when the match is not in play or the result is confirmed, and append a `match.clock.updated` audit row.
+
+The server also persists `clock_running_at` and `clock_accumulated_seconds`. Starting a match sets the running timestamp and clears accumulated time; half-time freezes it, second half resumes from the accumulated value, and full time/abandon stops it. Authorized clients derive the display from those server timestamps (plus added minutes), so browser refresh, reconnection and server restart recover the same time. State changes are broadcast through the existing `match.update` WebSocket frame; there are no per-second broadcasts. Manual clock corrections re-base the running period and keep the official minute intact.
 
 ## Officials
 

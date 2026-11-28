@@ -190,6 +190,8 @@ export const matches = pgTable('matches',{
   currentMinute:integer('current_minute'),
   addedMinutes:integer('added_minutes'),
   durationMinutes:integer('duration_minutes').notNull().default(90),
+  clockRunningAt:timestamp('clock_running_at',{withTimezone:true}),
+  clockAccumulatedSeconds:integer('clock_accumulated_seconds').notNull().default(0),
   ...timestamps
 },t=>[
   index('match_status_idx').on(t.status),

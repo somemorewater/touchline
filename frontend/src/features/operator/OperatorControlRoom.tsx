@@ -10,13 +10,13 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useActiveCompetition } from '@/features/competitions/CompetitionContext';
 import { Feedback, useAdminAction } from '@/features/admin/ui';
 import { useMatchLive } from '@/features/matches/useMatchLive';
+import { formatClock, useMatchClock } from '@/features/matches/useMatchClock';
 import {
   commentaryApi,
   matchesApi,
-  registrationsApi,
   type CommentaryCreateInput,
 } from '@/lib/api/endpoints';
-import type { MatchEventDto, PlayerRegistrationDto } from '@/lib/api/types';
+import type { MatchEventDto, MatchSquadDto, MatchSquadPlayerDto } from '@/lib/api/types';
 import { formatDateTime } from '@/lib/format';
 import { statusLabel } from '@/lib/match';
 import { DISPLAY_TIME_ZONE, type MatchStatus } from '@/types';
@@ -47,6 +47,10 @@ const KEY_MOMENT_TYPES = [
 ] as const;
 
 const LIVE_STATUSES = ['first_half', 'live', 'half_time', 'second_half', 'extra_time', 'penalties'];
+const PLAYER_REQUIRED_EVENTS = new Set([
+  'goal', 'own-goal', 'yellow-card', 'second-yellow', 'red-card',
+  'penalty-scored', 'penalty-missed', 'injury', 'substitution',
+]);
 
 export function OperatorControlRoom() {
   const { isOperator, isSuperAdmin } = useAuth();
@@ -58,6 +62,7 @@ export function OperatorControlRoom() {
   const [eventType, setEventType] = useState<string>('goal');
   const [teamId, setTeamId] = useState('');
   const [playerId, setPlayerId] = useState('');
+  const [playerSearch, setPlayerSearch] = useState('');
   const [outgoingId, setOutgoingId] = useState('');
   const [incomingId, setIncomingId] = useState('');
   const [minute, setMinute] = useState('0');
@@ -98,18 +103,22 @@ export function OperatorControlRoom() {
     queryFn: () => commentaryApi.overview(activeId),
     enabled: Boolean(activeId),
   });
-  const squadsQ = useQuery({
-    queryKey: ['operator-squads', activeId],
-    queryFn: async () => {
-      const ids = [detail?.match.homeRegistration?.id, detail?.match.awayRegistration?.id]
-        .filter((id): id is string => Boolean(id));
-      const lists = await Promise.all(ids.map((id) => registrationsApi.list({ teamRegistrationId: id, status: 'approved' })));
-      return lists.flat() as PlayerRegistrationDto[];
-    },
-    enabled: Boolean(detail),
+  const squadQ = useQuery({
+    queryKey: ['operator-squad', activeId],
+    queryFn: () => matchesApi.squad(activeId),
+    enabled: Boolean(activeId),
   });
-  const squads = squadsQ.data ?? [];
+  const squad: MatchSquadDto | undefined = squadQ.data;
   const live = useMatchLive(activeId, detail ? LIVE_STATUSES.includes(detail.match.status) : false);
+
+  const clockSource = {
+    status: live.update?.match.status ?? detail?.match.status ?? 'scheduled',
+    clockRunningAt: live.update?.match.clockRunningAt ?? detail?.match.clockRunningAt ?? null,
+    clockAccumulatedSeconds: live.update?.match.clockAccumulatedSeconds ?? detail?.match.clockAccumulatedSeconds ?? 0,
+    addedMinutes: live.update?.match.addedMinutes ?? detail?.match.addedMinutes ?? null,
+    currentMinute: live.update?.match.currentMinute ?? detail?.match.currentMinute ?? 0,
+  };
+  const clockDisplay = useMatchClock(clockSource);
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['operator-match', activeId] });
@@ -143,6 +152,7 @@ export function OperatorControlRoom() {
     setReason('');
     setImportant(false);
     setPlayerId('');
+    setPlayerSearch('');
     if (next === 'key') setEventType('chance');
     if (next === 'event') setEventType('goal');
     setDialog(next);
@@ -186,8 +196,13 @@ export function OperatorControlRoom() {
       <option value={detail?.match.awayRegistration?.id ?? ''}>{detail?.match.awayTeam?.name ?? 'Away'}</option>
     </>
   );
-  const squadFor = (id: string) => squads.filter((entry) => entry.teamRegistrationId === id);
-  const activeTeamId = teamId || detail?.match.homeRegistration?.id || '';
+  const squadFor = (id: string) => (squad?.players ?? []).filter(
+    (entry) => entry.teamRegistrationId === id && entry.eligible,
+  );
+  const activeTeamId = teamId || squad?.homeRegistrationId || detail?.match.homeRegistration?.id || '';
+  const playerLabel = (entry: MatchSquadPlayerDto) =>
+    `${entry.fullName} #${entry.shirtNumber ?? '–'}${entry.lineupRole ? ` (${entry.lineupRole})` : ''}`;
+  const selectedPlayer = (squad?.players ?? []).find((entry) => entry.registrationId === playerId);
 
   const officialTimeline = (detail?.events ?? []).map((event) => ({
     id: event.id, minute: event.minute, at: event.createdAt,
@@ -218,7 +233,7 @@ export function OperatorControlRoom() {
             <div className={styles.score}>{score.home} – {score.away}</div>
             <div><span>Away</span><strong>{detail.match.awayTeam?.name ?? 'Away'}</strong></div>
             <dl className={styles.meta}>
-              <div><dt>Clock</dt><dd>{currentMinute}&apos;{frame?.addedMinutes ? `+${frame.addedMinutes}` : ''}</dd></div>
+              <div><dt>Clock</dt><dd>{formatClock(clockDisplay)}</dd></div>
               <div><dt>Status</dt><dd>{statusLabel(status.replaceAll('_', '-') as MatchStatus)}</dd></div>
               <div><dt>Period</dt><dd>{LIVE_STATUSES.includes(status) ? status.replaceAll('_', ' ') : 'Pre-match'}</dd></div>
               <div><dt>Venue</dt><dd>{detail.match.fixture.venue ?? 'To be confirmed'}</dd></div>
@@ -332,7 +347,7 @@ export function OperatorControlRoom() {
           await matchesApi.createEvent(activeId, {
             clientEventId: crypto.randomUUID(),
             eventType,
-            teamRegistrationId: teamId || null,
+            teamRegistrationId: teamId || selectedPlayer?.teamRegistrationId || null,
             playerRegistrationId: playerId || null,
             minute: Number(minute),
             addedMinutes: addedMinutes ? Number(addedMinutes) : null,
@@ -340,9 +355,11 @@ export function OperatorControlRoom() {
           });
         }, 'Official event recorded.')}
         title="Record official incident"
-        message="This changes official match data and the score where applicable."
+        message={eventType === 'own-goal'
+          ? 'The scorer’s team is recorded; the opponent is credited with the goal.'
+          : 'This changes official match data and the score where applicable.'}
         confirmLabel="Record"
-        busy={action.pending !== null}
+        busy={action.pending !== null || (PLAYER_REQUIRED_EVENTS.has(eventType) && !playerId)}
       >
         <div className={styles.formGrid}>
           <label className="tl-field"><span className="tl-label">Type</span>
@@ -351,16 +368,42 @@ export function OperatorControlRoom() {
             </select>
           </label>
           <label className="tl-field"><span className="tl-label">Team</span>
-            <select className="tl-select" value={teamId} onChange={(e) => { setTeamId(e.target.value); setPlayerId(''); }}>
-              <option value="">Not specified</option>{teamOptions()}
+            <select className="tl-select" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">From selected player</option>{teamOptions()}
             </select>
           </label>
-          <label className="tl-field"><span className="tl-label">Player</span>
-            <select className="tl-select" value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
+          <label className={styles.wide}><span className="tl-label">Find player</span>
+            <input className="tl-input" value={playerSearch} onChange={(e) => setPlayerSearch(e.target.value)} placeholder="Name or shirt number" />
+          </label>
+          <label className={styles.wide}><span className="tl-label">Player</span>
+            <select
+              className="tl-select"
+              value={playerId}
+              onChange={(e) => {
+                const next = (squad?.players ?? []).find((entry) => entry.registrationId === e.target.value);
+                setPlayerId(e.target.value);
+                if (next) setTeamId(next.teamRegistrationId);
+              }}
+              required={PLAYER_REQUIRED_EVENTS.has(eventType)}
+            >
               <option value="">Not specified</option>
-              {squadFor(activeTeamId).map((entry) => <option key={entry.id} value={entry.id}>{entry.player.fullName}</option>)}
+              {(['home', 'away'] as const).map((side) => {
+                const teamIdForSide = side === 'home' ? squad?.homeRegistrationId : squad?.awayRegistrationId;
+                const list = squadFor(teamIdForSide ?? '').filter((entry) => {
+                  const term = playerSearch.trim().toLowerCase();
+                  return !term || entry.fullName.toLowerCase().includes(term) || String(entry.shirtNumber ?? '').includes(term);
+                });
+                return list.length === 0 ? null : (
+                  <optgroup key={side} label={side === 'home' ? 'Home Team' : 'Away Team'}>
+                    {list.map((entry) => <option key={entry.registrationId} value={entry.registrationId}>{playerLabel(entry)}</option>)}
+                  </optgroup>
+                );
+              })}
             </select>
           </label>
+          {!squad || squad.players.length === 0 ? (
+            <p className="tl-muted">No eligible players found for this match. {squad?.hasLineup === false ? 'Approved, eligible registrations are used when no lineup has been submitted.' : ''}</p>
+          ) : null}
           <label className="tl-field"><span className="tl-label">Minute</span><input className="tl-input" type="number" min={0} max={150} value={minute} onChange={(e) => setMinute(e.target.value)} /></label>
           <label className="tl-field"><span className="tl-label">Added</span><input className="tl-input" type="number" min={0} max={30} value={addedMinutes} onChange={(e) => setAddedMinutes(e.target.value)} /></label>
           <label className="tl-field"><span className="tl-label">Description</span><input className="tl-input" value={body} onChange={(e) => setBody(e.target.value)} /></label>
@@ -393,13 +436,13 @@ export function OperatorControlRoom() {
           <label className="tl-field"><span className="tl-label">Player off</span>
             <select className="tl-select" value={outgoingId} onChange={(e) => setOutgoingId(e.target.value)}>
               <option value="">Select</option>
-              {detail?.lineups.filter((l) => l.teamRegistrationId === activeTeamId).flatMap((l) => l.players).filter((p) => p.role === 'starter').map((p) => <option key={p.playerRegistrationId} value={p.playerRegistrationId}>{squads.find((s) => s.id === p.playerRegistrationId)?.player.fullName ?? p.playerRegistrationId}</option>)}
+              {squadFor(activeTeamId).filter((p) => p.lineupRole === 'starter').map((p) => <option key={p.registrationId} value={p.registrationId}>{playerLabel(p)}</option>)}
             </select>
           </label>
           <label className="tl-field"><span className="tl-label">Player on</span>
             <select className="tl-select" value={incomingId} onChange={(e) => setIncomingId(e.target.value)}>
               <option value="">Select</option>
-              {detail?.lineups.filter((l) => l.teamRegistrationId === activeTeamId).flatMap((l) => l.players).filter((p) => p.role === 'substitute').map((p) => <option key={p.playerRegistrationId} value={p.playerRegistrationId}>{squads.find((s) => s.id === p.playerRegistrationId)?.player.fullName ?? p.playerRegistrationId}</option>)}
+              {squadFor(activeTeamId).filter((p) => p.lineupRole === 'substitute').map((p) => <option key={p.registrationId} value={p.registrationId}>{playerLabel(p)}</option>)}
             </select>
           </label>
           <label className="tl-field"><span className="tl-label">Minute</span><input className="tl-input" type="number" min={0} max={150} value={minute} onChange={(e) => setMinute(e.target.value)} /></label>

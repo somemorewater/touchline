@@ -19,6 +19,9 @@ export interface LiveMatchPayload {
   status: string;
   currentMinute: number | null;
   addedMinutes: number | null;
+  durationMinutes: number;
+  clockRunningAt: string | null;
+  clockAccumulatedSeconds: number;
   homeScore: number;
   awayScore: number;
   resultConfirmedAt: string | null;
@@ -59,6 +62,9 @@ export function broadcastMatchUpdate(
     status: string;
     currentMinute: number | null;
     addedMinutes: number | null;
+    durationMinutes: number;
+    clockRunningAt: Date | null;
+    clockAccumulatedSeconds: number;
     homeScore: number;
     awayScore: number;
     resultConfirmedAt: Date | null;
@@ -71,6 +77,9 @@ export function broadcastMatchUpdate(
     status: match.status,
     currentMinute: match.currentMinute,
     addedMinutes: match.addedMinutes,
+    durationMinutes: match.durationMinutes,
+    clockRunningAt: match.clockRunningAt ? match.clockRunningAt.toISOString() : null,
+    clockAccumulatedSeconds: match.clockAccumulatedSeconds,
     homeScore: match.homeScore,
     awayScore: match.awayScore,
     resultConfirmedAt: match.resultConfirmedAt
