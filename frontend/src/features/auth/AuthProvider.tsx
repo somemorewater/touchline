@@ -39,6 +39,7 @@ interface AuthContextValue {
   isCompetitionAdmin: boolean;
   isCaptain: boolean;
   isOfficial: boolean;
+  isOperator: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -197,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isCompetitionAdmin: roles.has('competition_admin') || isSuperAdmin,
       isCaptain: roles.has('team_captain'),
       isOfficial: roles.has('match_official'),
+      isOperator: roles.has('commentary_operator'),
     };
   }, [status, user, bootstrapError, login, register, logout, logoutAll, changePassword, refreshUser]);
 

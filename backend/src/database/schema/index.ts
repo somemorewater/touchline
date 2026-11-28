@@ -234,6 +234,45 @@ export const matchEvents = pgTable('match_events',{
   check('match_event_distinct_players_check', sql`${t.playerRegistrationId} is null or ${t.secondaryPlayerRegistrationId} is null or ${t.playerRegistrationId} <> ${t.secondaryPlayerRegistrationId}`),
   check('match_event_substitution_players_check', sql`${t.eventType} <> 'substitution' or (${t.playerRegistrationId} is not null and ${t.secondaryPlayerRegistrationId} is not null)`),
 ]);
+
+/** Editorial records. They never modify official scores or match events. */
+export const commentaryEntries = pgTable('commentary_entries',{
+  id:uuid('id').primaryKey().defaultRandom(),
+  matchId:uuid('match_id').notNull().references(()=>matches.id,{onDelete:'cascade'}),
+  teamRegistrationId:uuid('team_registration_id').references(()=>teamRegistrations.id,{onDelete:'set null'}),
+  kind:varchar('kind',{length:16}).notNull().default('commentary'),
+  eventType:varchar('event_type',{length:40}),
+  body:text('body').notNull(),
+  minute:integer('minute'),
+  addedMinutes:integer('added_minutes'),
+  status:varchar('status',{length:16}).notNull().default('published'),
+  isImportant:boolean('is_important').notNull().default(false),
+  authorUserId:uuid('author_user_id').references(()=>users.id,{onDelete:'set null'}),
+  editedAt:timestamp('edited_at',{withTimezone:true}),
+  editedBy:uuid('edited_by').references(()=>users.id,{onDelete:'set null'}),
+  retractedAt:timestamp('retracted_at',{withTimezone:true}),
+  retractedBy:uuid('retracted_by').references(()=>users.id,{onDelete:'set null'}),
+  ...timestamps
+},t=>[
+  index('commentary_match_order_idx').on(t.matchId,t.minute,t.createdAt),
+  check('commentary_kind_check', sql`${t.kind} in ('commentary','key_moment')`),
+  check('commentary_status_check', sql`${t.status} in ('draft','published','retracted')`),
+  check('commentary_minute_check', sql`${t.minute} is null or ${t.minute} between 0 and 150`),
+  check('commentary_added_minutes_check', sql`${t.addedMinutes} is null or ${t.addedMinutes} between 0 and 30`),
+  check('commentary_event_type_check', sql`${t.eventType} is null or ${t.eventType} in ('goal','own-goal','yellow-card','second-yellow','red-card','substitution','injury','penalty-awarded','penalty-scored','penalty-missed','kickoff','half-time','full-time','chance','save','other')`),
+  check('commentary_key_moment_type_check', sql`${t.kind} <> 'key_moment' or ${t.eventType} is not null`),
+]);
+
+export const matchOverviews = pgTable('match_overviews',{
+  matchId:uuid('match_id').primaryKey().references(()=>matches.id,{onDelete:'cascade'}),
+  introduction:text('introduction'),
+  preMatchNotes:text('pre_match_notes'),
+  liveSummary:text('live_summary'),
+  narrative:text('narrative'),
+  updatedBy:uuid('updated_by').references(()=>users.id,{onDelete:'set null'}),
+  ...timestamps
+});
+
 export const lineups = pgTable('lineups',{
   id:uuid('id').primaryKey().defaultRandom(),
   matchId:uuid('match_id').notNull().references(()=>matches.id,{onDelete:'restrict'}),

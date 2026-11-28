@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -8,6 +9,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { useCompetition } from '@/features/competitions/hooks';
 import { usePlayers } from '@/features/players/hooks';
 import { useTeamMap } from '@/features/teams/hooks';
+import { commentaryApi } from '@/lib/api/endpoints';
 import { formatDateTime } from '@/lib/format';
 import { isLive, statusLabel } from '@/lib/match';
 import { DISPLAY_TIME_ZONE } from '@/types';
@@ -44,6 +46,15 @@ export function MatchCentre({ matchId }: { matchId: string }) {
   const { teams } = useTeamMap(q.data?.match.competitionId, q.data?.match.seasonId);
   const playersQ = usePlayers({ competitionId: q.data?.match.competitionId });
   const players = new Map((playersQ.data ?? []).map((p) => [p.id, p]));
+  const commentaryQ = useQuery({
+    queryKey: ['match-commentary', matchId],
+    queryFn: () => commentaryApi.list(matchId),
+    refetchInterval: q.data && isLive(q.data.match.status) ? 15_000 : false,
+  });
+  const overviewQ = useQuery({
+    queryKey: ['match-overview', matchId],
+    queryFn: () => commentaryApi.overview(matchId),
+  });
 
   if (q.isLoading) return <Skeleton lines={3} height={90} />;
   if (q.isError) return <ErrorState title="Could not load this match" onRetry={() => void q.refetch()} />;
@@ -57,7 +68,25 @@ export function MatchCentre({ matchId }: { matchId: string }) {
   const player = (id?: string) => (id ? players.get(id)?.fullName ?? id : undefined);
   const timeline = [...events].sort((a, b) => a.minute - b.minute);
   const teamName = (id: string) => (id === match.homeTeamId ? home : away);
-
+  const editorial = commentaryQ.data ?? [];
+  const editorialList = () => editorial.length === 0 ? (
+    <EmptyState title="No commentary yet">Updates published by the match operator appear here as the match develops.</EmptyState>
+  ) : (
+    <ul className={styles.events}>
+      {editorial.map((entry) => (
+        <li key={entry.id}>
+          <span className={styles.min}>{entry.minute === null ? '–' : `${entry.minute}${entry.addedMinutes ? `+${entry.addedMinutes}` : ''}′`}</span>
+          <div>
+            <strong>{entry.kind === 'key_moment' ? `Key moment · ${entry.eventType?.replaceAll('-', ' ') ?? 'update'}` : 'Commentary'}</strong>
+            {entry.isImportant ? ' · important' : ''}
+            {entry.status === 'retracted' ? ' · retracted' : ''}
+            <p>{entry.body}</p>
+            <small className="tl-muted">{entry.author ?? 'Match operator'}</small>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
   // A live frame paints the score and status immediately; the HTTP query is
   // invalidated at the same time, so the two never diverge for long.
   const liveFrame = live.update?.match ?? null;
@@ -86,6 +115,21 @@ export function MatchCentre({ matchId }: { matchId: string }) {
         </li>
       ))}
     </ol>
+  );
+
+  const overview = overviewQ.data;
+  const overviewContent = (
+    <>
+      {overview ? (
+        <div className="tl-stack-sm">
+          {overview.introduction ? <p>{overview.introduction}</p> : null}
+          {overview.preMatchNotes ? <p><strong>Pre-match</strong> {overview.preMatchNotes}</p> : null}
+          {overview.liveSummary ? <p><strong>Live</strong> {overview.liveSummary}</p> : null}
+          {overview.narrative ? <p>{overview.narrative}</p> : null}
+        </div>
+      ) : null}
+      {timeline.length ? eventList(false) : <EmptyState title="No events recorded">Goals, cards and substitutions appear here once they are recorded.</EmptyState>}
+    </>
   );
 
   return (
@@ -121,8 +165,8 @@ export function MatchCentre({ matchId }: { matchId: string }) {
       <Tabs
         label="Match sections"
         tabs={[
-          { id: 'overview', label: 'Overview', content: timeline.length ? eventList(false) : <EmptyState title="No events recorded">Goals, cards and substitutions appear here once the match official records them.</EmptyState> },
-          { id: 'commentary', label: 'Commentary', content: timeline.length ? eventList(true) : <EmptyState title="No commentary yet">Updates are listed newest first as events are recorded.</EmptyState> },
+          { id: 'overview', label: 'Overview', content: overviewContent },
+          { id: 'commentary', label: 'Commentary', content: editorialList() },
           {
             id: 'lineups', label: 'Lineups',
             content: lineups.length === 0 ? (

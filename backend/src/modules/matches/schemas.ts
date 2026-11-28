@@ -111,15 +111,17 @@ export const matchReinstateSchema = z.object({}).strict();
 export const matchOfficialAssignSchema = z
   .object({
     userId: uuidSchema,
-    role: z.enum(['official']).optional(),
+    role: z.enum(['official', 'commentary']).optional(),
   })
   .strict();
 
 export const matchOfficialUpdateSchema = z
   .object({
-    role: z.enum(['official']).optional(),
+    role: z.enum(['official', 'commentary']).optional(),
   })
   .strict();
+
+export const matchPersonnelRoles = ['official', 'commentary'] as const;
 
 export type MatchEventCreate = z.infer<typeof matchEventCreateSchema>;
 export type MatchEventCorrect = z.infer<typeof matchEventCorrectSchema>;

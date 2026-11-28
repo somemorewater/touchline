@@ -35,6 +35,7 @@ import {
   matchLifecycleSchema,
   matchOfficialAssignSchema,
   matchOfficialUpdateSchema,
+  matchPersonnelRoles,
   matchReinstateSchema,
   matchReportSchema,
   matchRescheduleSchema,
@@ -50,6 +51,7 @@ import {
   listMatchesForOfficial,
   removeMatchOfficial,
   reinstateMatch,
+  replaceMatchPersonnel,
   rescheduleMatch,
   submitMatchReport,
   transitionMatch,
@@ -149,6 +151,18 @@ const officialParamsSchema = {
     properties: {
       id: { type: 'string', pattern: uuidPattern },
       userId: { type: 'string', pattern: uuidPattern },
+    },
+  },
+} as const;
+
+const personnelParamsSchema = {
+  params: {
+    type: 'object',
+    required: ['id', 'role'],
+    additionalProperties: false,
+    properties: {
+      id: { type: 'string', pattern: uuidPattern },
+      role: { type: 'string', enum: [...matchPersonnelRoles] },
     },
   },
 } as const;
@@ -405,6 +419,25 @@ export async function matchRoutes(app: FastifyInstance) {
           matchOfficialUpdateSchema.parse(req.body),
         ),
       );
+    },
+  );
+
+  app.put(
+    '/matches/:id/personnel/:role',
+    {
+      preHandler: app.authenticate,
+      schema: {
+        ...secure,
+        summary: 'Replace the holder of a match personnel role',
+        params: personnelParamsSchema.params,
+        body: jsonSchema(matchOfficialAssignSchema),
+        response: { ...successResponse(), ...errorResponse },
+      },
+    },
+    async (req, reply) => {
+      const { id, role } = req.params as { id: string; role: 'official' | 'commentary' };
+      const { userId } = matchOfficialAssignSchema.parse(req.body);
+      return ok(reply, await replaceMatchPersonnel(requireAuth(req), id, role, userId));
     },
   );
 

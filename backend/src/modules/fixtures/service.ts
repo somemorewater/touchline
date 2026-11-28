@@ -26,6 +26,7 @@ import {
 } from '../../database/schema/index.js';
 import { badRequest, conflict, forbidden, notFound } from '../../shared/errors.js';
 import type { AuthContext } from '../../security/context.js';
+import { insertPersonnelAssignment } from '../matches/personnel.js';
 import {
   competitionScopesFor,
   hasPermission,
@@ -354,15 +355,42 @@ export async function createFixture(auth: AuthContext, input: FixtureCreate) {
       .returning();
     if (!match) throw new Error('Match insert did not return a row.');
 
+    // Any eligibility failure rolls back the fixture and match as well, so a
+    // requested assignment can never be silently dropped.
+    const official = input.officialUserId
+      ? await insertPersonnelAssignment(tx, {
+          matchId: match.id,
+          userId: input.officialUserId,
+          role: 'official',
+          competitionId: competition.id,
+          seasonId: season.id,
+          actor: auth,
+        })
+      : null;
+    const commentary = input.commentaryUserId
+      ? await insertPersonnelAssignment(tx, {
+          matchId: match.id,
+          userId: input.commentaryUserId,
+          role: 'commentary',
+          competitionId: competition.id,
+          seasonId: season.id,
+          actor: auth,
+        })
+      : null;
+
     await writeFixtureAudit(tx, auth.userId, 'fixture.created', fixture.id, null, {
       fixture,
       matchId: match.id,
+      officialUserId: input.officialUserId ?? null,
+      commentaryUserId: input.commentaryUserId ?? null,
     });
     return {
       competitionId: competition.id,
       seasonId: season.id,
       fixture,
       match,
+      official,
+      commentary,
     };
   });
 }

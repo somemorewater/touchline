@@ -25,6 +25,8 @@ export const fixtureCreateSchema = z
     round: z.number().int().min(1).max(500).nullable().optional(),
     scheduledAt: isoDateTime.nullable().optional(),
     venue: z.string().trim().max(200).nullable().optional(),
+    officialUserId: uuidSchema.nullable().optional(),
+    commentaryUserId: uuidSchema.nullable().optional(),
   })
   .strict()
   .refine(

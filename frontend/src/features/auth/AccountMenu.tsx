@@ -12,7 +12,7 @@ import styles from './AccountMenu.module.css';
  * account lacks the role, but the API is the authority for every action.
  */
 export function AccountMenu() {
-  const { status, user, isCaptain, isOfficial, isCompetitionAdmin, logout } = useAuth();
+  const { status, user, isCaptain, isOfficial, isOperator, isCompetitionAdmin, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -78,6 +78,7 @@ export function AccountMenu() {
             <Link href="/account" onClick={() => setOpen(false)}>Account settings</Link>
             {isCaptain ? <Link href="/captain" onClick={() => setOpen(false)}>Captain workspace</Link> : null}
             {isOfficial ? <Link href="/official" onClick={() => setOpen(false)}>Official workspace</Link> : null}
+            {isOperator ? <Link href="/operator" onClick={() => setOpen(false)}>Operator control room</Link> : null}
             {isCompetitionAdmin ? <Link href="/admin" onClick={() => setOpen(false)}>Administration</Link> : null}
           </nav>
           <button

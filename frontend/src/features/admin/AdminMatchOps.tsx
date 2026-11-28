@@ -146,6 +146,7 @@ function FixtureManagement({ competitionId, seasonId }: { competitionId: string;
         <>
           <CreateFixtureForm
             seasonId={seasonId}
+            competitionId={competitionId}
             entries={approvedEntries}
             groups={groupsQ.data ?? []}
             pending={action.pending === 'create-fixture'}
@@ -464,6 +465,7 @@ function FixtureRow({
 
 function CreateFixtureForm({
   seasonId,
+  competitionId,
   entries,
   groups,
   pending,
@@ -471,6 +473,7 @@ function CreateFixtureForm({
   run,
 }: {
   seasonId: string;
+  competitionId: string;
   entries: { registration: { id: string; status: string }; team: { name: string } }[];
   groups: GroupDto[];
   pending: boolean;
@@ -483,6 +486,19 @@ function CreateFixtureForm({
   const [round, setRound] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [venue, setVenue] = useState('');
+  const [officialUserId, setOfficialUserId] = useState('');
+  const [commentaryUserId, setCommentaryUserId] = useState('');
+
+  const officialsQ = useQuery({
+    queryKey: ['admin-personnel-users', competitionId, 'match_official'],
+    queryFn: () => usersApi.list({ role: 'match_official', competitionId, limit: 100 }),
+  });
+  const operatorsQ = useQuery({
+    queryKey: ['admin-personnel-users', competitionId, 'commentary_operator'],
+    queryFn: () => usersApi.list({ role: 'commentary_operator', competitionId, limit: 100 }),
+  });
+  const eligibleOfficials = (officialsQ.data?.items ?? []).filter((user) => user.isActive);
+  const eligibleOperators = (operatorsQ.data?.items ?? []).filter((user) => user.isActive);
 
   if (entries.length < 2) {
     return <p className="tl-alert tl-alert-info">At least two approved team entries are needed before fixtures can be created.</p>;
@@ -502,12 +518,16 @@ function CreateFixtureForm({
             round: round ? Number(round) : null,
             scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
             venue: venue.trim() || null,
+            officialUserId: officialUserId || null,
+            commentaryUserId: commentaryUserId || null,
           });
           setHome('');
           setAway('');
           setRound('');
           setScheduledAt('');
           setVenue('');
+          setOfficialUserId('');
+          setCommentaryUserId('');
           onCreated();
         });
       }}
@@ -546,6 +566,18 @@ function CreateFixtureForm({
         </Field>
         <Field label="Venue">
           <input className="tl-input" value={venue} onChange={(event) => setVenue(event.target.value)} maxLength={200} />
+        </Field>
+        <Field label="Match Official" hint="Optional. Eligible users with the competition-scoped role.">
+          <select className="tl-select" value={officialUserId} onChange={(event) => setOfficialUserId(event.target.value)}>
+            <option value="">Not assigned</option>
+            {eligibleOfficials.map((user) => <option key={user.id} value={user.id}>{user.displayName} · {user.email}</option>)}
+          </select>
+        </Field>
+        <Field label="Commentary Operator" hint="Optional. Eligible users with the competition-scoped role.">
+          <select className="tl-select" value={commentaryUserId} onChange={(event) => setCommentaryUserId(event.target.value)}>
+            <option value="">Not assigned</option>
+            {eligibleOperators.map((user) => <option key={user.id} value={user.id}>{user.displayName} · {user.email}</option>)}
+          </select>
         </Field>
       </div>
       <div className={styles.formActions}>
@@ -1039,6 +1071,19 @@ function CorrectResult({
   );
 }
 
+type PersonnelRole = 'official' | 'commentary';
+type PersonnelDialog = {
+  action: 'assign' | 'change' | 'remove';
+  role: PersonnelRole;
+  userId?: string;
+  name?: string;
+} | null;
+
+const PERSONNEL_LABEL: Record<PersonnelRole, string> = {
+  official: 'Match Official',
+  commentary: 'Commentary Operator',
+};
+
 function OfficialsPanel({
   matchId,
   competitionId,
@@ -1062,80 +1107,132 @@ function OfficialsPanel({
     queryFn: () => matchesApi.officials(matchId),
   });
   const candidatesQ = useQuery({
-    queryKey: ['admin-official-users', competitionId],
-    queryFn: () => usersApi.list({ role: 'match_official', competitionId, limit: 50 }),
+    queryKey: ['admin-personnel-users', competitionId, 'both'],
+    queryFn: async () => {
+      const [officials, operators] = await Promise.all([
+        usersApi.list({ role: 'match_official', competitionId, limit: 100 }),
+        usersApi.list({ role: 'commentary_operator', competitionId, limit: 100 }),
+      ]);
+      return { officials: officials.items, operators: operators.items };
+    },
     enabled: canAssign,
   });
+  const [dialog, setDialog] = useState<PersonnelDialog>(null);
   const [selected, setSelected] = useState('');
+  const [search, setSearch] = useState('');
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin-officials', matchId] });
+    void queryClient.invalidateQueries({ queryKey: ['operator-assignments'] });
     onChanged();
   };
 
-  const assigned = new Set((officialsQ.data ?? []).map((entry) => entry.userId));
-  const candidates = (candidatesQ.data?.items ?? []).filter(
-    (candidate) => candidate.isActive && candidate.id !== currentUserId && !assigned.has(candidate.id),
-  );
+  const assigned = officialsQ.data ?? [];
+  const currentFor = (role: PersonnelRole) => assigned.find((entry) => entry.role === role) ?? null;
+  const candidatesFor = (role: PersonnelRole) => {
+    const pool = role === 'official'
+      ? candidatesQ.data?.officials ?? []
+      : candidatesQ.data?.operators ?? [];
+    const term = search.trim().toLowerCase();
+    return pool.filter((user) =>
+      user.isActive &&
+      user.id !== currentUserId &&
+      !assigned.some((entry) => entry.userId === user.id) &&
+      (!term || user.displayName.toLowerCase().includes(term) || user.email.toLowerCase().includes(term)),
+    );
+  };
+
+  const dialogName = dialog?.name ?? [...(candidatesQ.data?.officials ?? []), ...(candidatesQ.data?.operators ?? [])]
+    .find((user) => user.id === selected)?.displayName ?? selected;
 
   return (
     <div className={styles.detail}>
-      <h4><Flag size={15} aria-hidden /> Match officials</h4>
-      {officialsQ.isLoading ? <p className={styles.muted}>Loading officials…</p> : officialsQ.isError ? (
-        <p className="tl-alert tl-alert-error" role="alert">Could not load the officials.</p>
-      ) : (officialsQ.data ?? []).length === 0 ? (
-        <p className={styles.muted}>No official is assigned to this match.</p>
+      <h4><Flag size={15} aria-hidden /> Match Personnel</h4>
+      {officialsQ.isLoading ? <p className={styles.muted}>Loading personnel…</p> : officialsQ.isError ? (
+        <p className="tl-alert tl-alert-error" role="alert">Could not load match personnel.</p>
       ) : (
-        <ul className={styles.list}>
-          {officialsQ.data!.map((official) => (
-            <li key={official.userId} className={styles.entryRow}>
-              <div className={styles.entryMain}>
-                <strong>{official.displayName}</strong>
-                <span className={styles.muted}>{statusLabel(official.role)} · assigned {formatDateTime(official.assignedAt, DISPLAY_TIME_ZONE)}</span>
+        <div className={styles.formGrid}>
+          {(['official', 'commentary'] as const).map((role) => {
+            const current = currentFor(role);
+            return (
+              <div key={role} className={styles.entry}>
+                <strong>{PERSONNEL_LABEL[role]}</strong>
+                <span className={styles.muted}>
+                  {current ? `${current.displayName} · assigned ${formatDateTime(current.assignedAt, DISPLAY_TIME_ZONE)}` : 'Not assigned'}
+                </span>
+                {canAssign ? (
+                  <div className={styles.rowActions}>
+                    {current ? (
+                      <>
+                        <button type="button" className="tl-btn tl-btn-sm" disabled={pending !== null}
+                          onClick={() => { setSelected(''); setSearch(''); setDialog({ action: 'change', role, userId: current.userId, name: current.displayName }); }}>
+                          Change assignment
+                        </button>
+                        <button type="button" className="tl-btn tl-btn-sm tl-btn-danger" disabled={pending !== null}
+                          onClick={() => setDialog({ action: 'remove', role, userId: current.userId, name: current.displayName })}>
+                          Remove assignment
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" className="tl-btn tl-btn-sm tl-btn-primary" disabled={pending !== null}
+                        onClick={() => { setSelected(''); setSearch(''); setDialog({ action: 'assign', role }); }}>
+                        Assign {PERSONNEL_LABEL[role]}
+                      </button>
+                    )}
+                  </div>
+                ) : null}
               </div>
-              {canAssign ? (
-                <button
-                  type="button"
-                  className="tl-btn tl-btn-sm tl-btn-danger"
-                  disabled={pending !== null}
-                  onClick={() => void run(`remove-official:${matchId}:${official.userId}`, async () => {
-                    await matchesApi.removeOfficial(matchId, official.userId);
-                    invalidate();
-                    return `${official.displayName} removed from the match.`;
-                  })}
-                >
-                  Remove
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+            );
+          })}
+        </div>
       )}
 
-      {canAssign ? (
-        <form
-          className={styles.inlineForm}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void run(`assign-official:${matchId}`, async () => {
-              await matchesApi.assignOfficial(matchId, selected);
-              setSelected('');
-              invalidate();
-              return 'Official assigned.';
-            });
-          }}
-        >
-          <Field label="Assign an official">
-            <select className="tl-select" value={selected} onChange={(event) => setSelected(event.target.value)} required>
-              <option value="">Select a match official</option>
-              {candidates.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>{candidate.displayName} · {candidate.email}</option>
-              ))}
-            </select>
-          </Field>
-          <button type="submit" className="tl-btn" disabled={pending !== null || !selected}>Assign</button>
-        </form>
-      ) : null}
+      <ConfirmDialog
+        open={dialog !== null}
+        onClose={() => setDialog(null)}
+        onConfirm={() => {
+          if (!dialog) return;
+          const { action, role, userId } = dialog;
+          void run(`personnel-${action}-${role}-${matchId}`, async () => {
+            if (action === 'remove' && userId) {
+              await matchesApi.removeOfficial(matchId, userId);
+            } else if (action === 'change') {
+              await matchesApi.replaceOfficial(matchId, role, selected);
+            } else {
+              await matchesApi.assignOfficial(matchId, selected, role);
+            }
+            setDialog(null);
+            setSelected('');
+            invalidate();
+            return `${PERSONNEL_LABEL[role]} ${action === 'remove' ? 'removed' : 'updated'}.`;
+          });
+        }}
+        title={dialog?.action === 'remove' ? `Remove ${PERSONNEL_LABEL[dialog.role]}` : `${dialog?.action === 'change' ? 'Change' : 'Assign'} ${dialog ? PERSONNEL_LABEL[dialog.role] : ''}`}
+        message={dialog?.action === 'remove'
+          ? `Remove ${dialog.name ?? 'this user'} from this match? Their access to this match will be revoked.`
+          : dialog?.action === 'change'
+            ? `Replace ${dialog.name ?? 'the current holder'} with ${dialogName || 'the selected user'}.`
+            : `Select an eligible ${dialog ? PERSONNEL_LABEL[dialog.role] : ''} from this competition.`}
+        confirmLabel={dialog?.action === 'remove' ? 'Remove assignment' : 'Save assignment'}
+        isDestructive={dialog?.action === 'remove'}
+        busy={pending !== null}
+      >
+        {dialog?.action !== 'remove' ? (
+          <div className={styles.formGrid}>
+            <Field label="Filter by name or email">
+              <input className="tl-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search eligible users" />
+            </Field>
+            <Field label={dialog ? PERSONNEL_LABEL[dialog.role] : 'User'}>
+              <select className="tl-select" value={selected} onChange={(event) => setSelected(event.target.value)} required>
+                <option value="">Select a user</option>
+                {dialog ? candidatesFor(dialog.role).map((user) => (
+                  <option key={user.id} value={user.id}>{user.displayName} · {user.email}</option>
+                )) : null}
+              </select>
+            </Field>
+          </div>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }

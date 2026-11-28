@@ -4,6 +4,7 @@ import { uuidSchema } from '../../shared/schema.js';
 export const assignableRoleNames = [
   'team_captain',
   'match_official',
+  'commentary_operator',
   'competition_admin',
   'super_admin',
   'registered_user',

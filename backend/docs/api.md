@@ -96,12 +96,13 @@ OpenAPI UI is `/docs`. Path parameters shown as `:id` must be UUIDs; otherwise t
 | POST | `/api/v1/player-registrations/:id/approve` | scoped reviewer | Transactional revalidation + row lock |
 | POST | `/api/v1/player-registrations/:id/reject` | scoped reviewer | Requires a rejection reason |
 | POST | `/api/v1/player-registrations/:id/withdraw` | owning captain | submitted/under_review → withdrawn |
+| POST | `/api/v1/competition-accounts` | scoped `roles.manage` | Creates a scoped `match_official` or `commentary_operator` account |
 | POST | `/api/v1/admin-accounts` | super admin | Creates admin account + global/scoped grants |
 | GET | `/api/v1/admin-accounts` | super admin | Lists administrator accounts and assignments |
 | POST | `/api/v1/admin-accounts/:id/competitions` | super admin | Grants scoped `competition_admin` |
 | DELETE | `/api/v1/admin-accounts/:id/competitions/:competitionId` | super admin | Revokes that scoped grant |
 | GET | `/api/v1/fixtures` | public, optionally private | Filters: competition, season, group, team, team entry, status; only published fixtures publicly |
-| POST | `/api/v1/fixtures` | fixture manager | Creates a draft fixture + match in one transaction |
+| POST | `/api/v1/fixtures` | fixture manager | Creates a draft fixture + match in one transaction; optional `officialUserId`/`commentaryUserId` assignments are validated and inserted in the same transaction |
 | POST | `/api/v1/fixtures/generate/preview` | fixture manager | Round-robin preview; writes nothing |
 | POST | `/api/v1/fixtures/generate` | fixture manager | Transactional generation; never overwrites existing fixtures |
 | GET | `/api/v1/fixtures/:id` | public, optionally private | Published fixture in a public competition, or scoped/official/captain |
@@ -118,7 +119,8 @@ OpenAPI UI is `/docs`. Path parameters shown as `:id` must be UUIDs; otherwise t
 | PATCH | `/api/v1/matches/:id/events/:eventId` | reporting authority | Requires `reason`; appends an audit correction |
 | POST | `/api/v1/matches/:id/events/:eventId/void` | reporting authority | Requires `reason`; excludes the event from the score |
 | GET | `/api/v1/matches/:id/officials` | match readers | Assigned officials with display names |
-| POST | `/api/v1/matches/:id/officials` | `officials.assign`/`matches.manage` | Eligible, active, non-self assignment |
+| POST | `/api/v1/matches/:id/officials` | `officials.assign`/`matches.manage` | Eligible, active, non-self assignment with `role: official|commentary` |
+| PUT | `/api/v1/matches/:id/personnel/:role` | `officials.assign`/`matches.manage` | Atomic replacement of one role's holder |
 | PATCH | `/api/v1/matches/:id/officials/:userId` | same | Updates the assignment role |
 | DELETE | `/api/v1/matches/:id/officials/:userId` | same | Removal before kickoff only |
 | GET | `/api/v1/officials/me/matches` | authenticated official | Matches explicitly assigned to the caller |
@@ -133,6 +135,12 @@ OpenAPI UI is `/docs`. Path parameters shown as `:id` must be UUIDs; otherwise t
 | PATCH | `/api/v1/matches/:id/venue` | `matches.manage` | Audited venue change on the underlying fixture; before kickoff only |
 | PATCH | `/api/v1/matches/:id/duration` | `matches.manage` | Audited whole-number duration (`10..120`); before kickoff only |
 | PATCH | `/api/v1/matches/:id/clock` | reporting authority | Explicit `minute` + optional `addedMinutes` |
+| GET | `/api/v1/matches/:id/commentary` | match reader / operator | Published editorial timeline |
+| POST | `/api/v1/matches/:id/commentary` | operator / manager | Audited commentary or key moment |
+| PATCH | `/api/v1/matches/:id/commentary/:entryId` | operator / manager | Audited correction |
+| POST | `/api/v1/matches/:id/commentary/:entryId/retract` | operator / manager | Audited retraction; history preserved |
+| GET | `/api/v1/matches/:id/overview` | match reader / operator | Editorial match overview |
+| PUT | `/api/v1/matches/:id/overview` | operator / manager | Audited overview update |
 | GET | `/api/v1/matches/:id/result` | public, optionally private | Persisted and derived score plus event snapshot |
 | POST | `/api/v1/matches/:id/report` | reporting authority | Full-time result submission; confirms the derived score |
 | POST | `/api/v1/matches/:id/result/correct` | `matches.manage` | Audited re-confirmation after a correction |

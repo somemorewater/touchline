@@ -3,6 +3,7 @@ export const ROLES = {
   registeredUser: 'registered_user',
   teamCaptain: 'team_captain',
   matchOfficial: 'match_official',
+  commentaryOperator: 'commentary_operator',
   competitionAdmin: 'competition_admin',
   superAdmin: 'super_admin',
 } as const;
@@ -39,6 +40,7 @@ export const PERMISSIONS = {
   filesRead: 'files.read',
   filesManage: 'files.manage',
   officialsAssign: 'officials.assign',
+  commentaryManage: 'commentary.manage',
   auditRead: 'audit.read',
 } as const;
 
@@ -69,6 +71,13 @@ export const ROLE_GRANTS: Record<RoleName, Permission[]> = {
     PERMISSIONS.matchesReport,
     PERMISSIONS.lineupsManage,
     PERMISSIONS.filesRead,
+  ],
+  [ROLES.commentaryOperator]: [
+    ...REGISTERED_USER_PERMISSIONS,
+    PERMISSIONS.matchesReport,
+    PERMISSIONS.lineupsManage,
+    PERMISSIONS.filesRead,
+    PERMISSIONS.commentaryManage,
   ],
   [ROLES.competitionAdmin]: [
     ...REGISTERED_USER_PERMISSIONS,
@@ -102,6 +111,7 @@ export const ROLE_DESCRIPTIONS: Record<RoleName, string> = {
   [ROLES.registeredUser]: 'Baseline account; no administrative privileges.',
   [ROLES.teamCaptain]: 'Manages only team resources they own.',
   [ROLES.matchOfficial]: 'Reports only for matches explicitly assigned to them.',
+  [ROLES.commentaryOperator]: 'Full live match operation and commentary for assigned matches.',
   [ROLES.competitionAdmin]: 'Administers only competitions explicitly scoped to them.',
   [ROLES.superAdmin]: 'Global platform administrator.',
 };
@@ -136,6 +146,7 @@ export const PERMISSION_DESCRIPTIONS: Record<Permission, string> = {
   [PERMISSIONS.filesRead]: 'Read and download evidence files the caller is authorized to access.',
   [PERMISSIONS.filesManage]: 'Attach and remove private evidence files within scope.',
   [PERMISSIONS.officialsAssign]: 'Assign match officials within scope.',
+  [PERMISSIONS.commentaryManage]: 'Publish and manage live commentary and match overview within scope.',
   [PERMISSIONS.auditRead]: 'Read audit records within scope.',
 };
 

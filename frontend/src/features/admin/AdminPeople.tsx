@@ -10,6 +10,7 @@ import {
   adminApi,
   announcementsApi,
   auditApi,
+  competitionAccountsApi,
   competitionsApi,
   usersApi,
 } from '@/lib/api/endpoints';
@@ -28,11 +29,12 @@ const ROLES = [
   'registered_user',
   'team_captain',
   'match_official',
+  'commentary_operator',
   'competition_admin',
   'super_admin',
 ] as const;
 
-const SCOPED_ROLES = new Set(['team_captain', 'match_official', 'competition_admin']);
+const SCOPED_ROLES = new Set(['team_captain', 'match_official', 'commentary_operator', 'competition_admin']);
 const AUDIENCES: AnnouncementAudience[] = ['public', 'participants', 'captains', 'officials', 'administrators'];
 
 export function AdminPeople({ section = 'all' }: { section?: 'users' | 'announcements' | 'audit' | 'all' }) {
@@ -76,6 +78,12 @@ export function AdminPeople({ section = 'all' }: { section?: 'users' | 'announce
 
 function UsersPanel({ competitionId }: { competitionId?: string }) {
   const queryClient = useQueryClient();
+  const { canIn } = useAuth();
+  const accountAction = useAdminAction();
+  const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<'match_official' | 'commentary_operator'>('match_official');
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [role, setRole] = useState('');
@@ -98,6 +106,45 @@ function UsersPanel({ competitionId }: { competitionId?: string }) {
   return (
     <>
       <h3 className={styles.subheading}><UserCog size={16} aria-hidden /> Users</h3>
+      {competitionId && canIn('roles.manage', competitionId) ? (
+        <form
+          className={styles.form}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void accountAction.run('provision-account', async () => {
+              await competitionAccountsApi.create({
+                email: newEmail.trim(),
+                displayName: newName.trim(),
+                password: newPassword,
+                role: newRole,
+                competitionId,
+              });
+              setNewEmail('');
+              setNewName('');
+              setNewPassword('');
+              void queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+              return 'Operational account created for this competition.';
+            });
+          }}
+        >
+          <strong>Add an operational account</strong>
+          <Feedback error={accountAction.error} notice={accountAction.notice} />
+          <div className={styles.formGrid}>
+            <Field label="Display name"><input className="tl-input" required value={newName} onChange={(e) => setNewName(e.target.value)} /></Field>
+            <Field label="Email"><input className="tl-input" type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></Field>
+            <Field label="Temporary password"><input className="tl-input" type="password" required minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></Field>
+            <Field label="Role">
+              <select className="tl-select" value={newRole} onChange={(e) => setNewRole(e.target.value as typeof newRole)}>
+                <option value="match_official">Match official</option>
+                <option value="commentary_operator">Match operator</option>
+              </select>
+            </Field>
+          </div>
+          <div className={styles.formActions}>
+            <button type="submit" className="tl-btn tl-btn-primary" disabled={accountAction.pending !== null}>Create account</button>
+          </div>
+        </form>
+      ) : null}
       <div className={styles.filterRow}>
         <Field label="Search">
           <input className="tl-input" value={q} onChange={(event) => setQ(event.target.value)} placeholder="Name or email" />

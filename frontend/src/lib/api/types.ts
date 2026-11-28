@@ -13,6 +13,7 @@ export type RoleName =
   | 'registered_user'
   | 'team_captain'
   | 'match_official'
+  | 'commentary_operator'
   | 'competition_admin'
   | 'super_admin';
 
@@ -242,6 +243,35 @@ export interface MatchEventDto {
   receivedAt: string;
   voidedAt: string | null;
   correctedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommentaryEntryDto {
+  id: string;
+  matchId: string;
+  teamRegistrationId: string | null;
+  kind: 'commentary' | 'key_moment';
+  eventType: string | null;
+  body: string;
+  minute: number | null;
+  addedMinutes: number | null;
+  status: 'draft' | 'published' | 'retracted';
+  isImportant: boolean;
+  author: string | null;
+  editedAt: string | null;
+  retractedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MatchOverviewDto {
+  matchId: string;
+  introduction: string | null;
+  preMatchNotes: string | null;
+  liveSummary: string | null;
+  narrative: string | null;
+  updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }

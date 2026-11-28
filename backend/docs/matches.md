@@ -35,9 +35,11 @@ Half-time is at half the configured duration, the second half starts one minute 
 
 ## Officials
 
-`GET`, `POST`, `PATCH` and `DELETE /api/v1/matches/:id/officials` manage `match_officials`. Assignment requires `officials.assign` or `matches.manage` in the match's competition, an active `match_official` role (global or scoped to that competition), no duplicate, and no self-assignment. Removal is only possible before kickoff. `GET /api/v1/officials/me/matches` lists the caller's assigned matches.
+`GET`, `POST`, `PATCH` and `DELETE /api/v1/matches/:id/officials` manage `match_officials`. Assignment requires `officials.assign` or `matches.manage` in the match's competition, an active `match_official` or `commentary_operator` role (global or scoped to that competition) matching the requested `official`/`commentary` assignment, no duplicate, and no self-assignment. Removal is only possible before kickoff. `PUT /personnel/:role` replaces one role's holder atomically. Optional personnel IDs can also be supplied when the fixture/match is created; they are validated inside the creation transaction. `GET /api/v1/officials/me/matches` lists the caller's assigned matches.
 
-Write authority for match operations is `canReportMatch`: `matches.manage` in scope, or `matches.report` plus an explicit assignment. Captains can read their own matches and events but cannot report or correct results.
+Write authority for match operations is `canReportMatch`: `matches.manage` in scope, or `matches.report` plus an explicit assignment. A `commentary_operator` holds `matches.report` and is assigned through `matchOfficials` with role `commentary`, so the same clock, lifecycle, event, correction and result endpoints apply to them. Captains can read their own matches and events but cannot report or correct results.
+
+Editorial commentary and the match overview use separate `commentary_entries` / `match_overviews` records, gated by `commentary.manage` plus match assignment. They appear on the public match centre but never create official events or change scores.
 
 ## Results
 

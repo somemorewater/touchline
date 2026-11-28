@@ -4,6 +4,7 @@ export const ROLE_LABEL: Record<string, string> = {
   registered_user: 'Registered user',
   team_captain: 'Team captain',
   match_official: 'Match official',
+  commentary_operator: 'Match operator',
   competition_admin: 'Competition administrator',
   super_admin: 'Super administrator',
 };

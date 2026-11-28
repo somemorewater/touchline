@@ -45,10 +45,14 @@ export function useMatchLive(matchId: string, enabled = true): MatchLiveState {
   const invalidateRef = useRef(() => {
     void queryClient.invalidateQueries({ queryKey: ['match', matchId] });
     void queryClient.invalidateQueries({ queryKey: ['matches'] });
+    void queryClient.invalidateQueries({ queryKey: ['match-commentary', matchId] });
+    void queryClient.invalidateQueries({ queryKey: ['match-overview', matchId] });
   });
   invalidateRef.current = () => {
     void queryClient.invalidateQueries({ queryKey: ['match', matchId] });
     void queryClient.invalidateQueries({ queryKey: ['matches'] });
+    void queryClient.invalidateQueries({ queryKey: ['match-commentary', matchId] });
+    void queryClient.invalidateQueries({ queryKey: ['match-overview', matchId] });
   };
 
   const canConnect = enabled && authStatus === 'authenticated' && Boolean(matchId);

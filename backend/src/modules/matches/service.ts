@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db } from '../../database/client.js';
 import {
@@ -10,13 +10,12 @@ import {
   seasons,
   teamRegistrations,
   teams,
-  userRoles,
-  roles,
   users,
 } from '../../database/schema/index.js';
 import { badRequest, conflict, forbidden, notFound } from '../../shared/errors.js';
 import type { AuthContext } from '../../security/context.js';
 import { canReadMatch } from '../../security/access.js';
+import { assertPersonnelEligible, insertPersonnelAssignment } from './personnel.js';
 import {
   calculateScore,
   canManageOfficials,
@@ -511,10 +510,13 @@ export async function listMatchesForOfficial(userId: string) {
 
   return rows.map((row) => ({
     ...row.match,
+    matchId: row.match.id,
     fixture: row.fixture,
     competitionId: row.competitionId,
     officialRole: row.role,
     assignedAt: row.assignedAt,
+    homeTeamName: row.homeTeamName,
+    awayTeamName: row.awayTeamName,
     homeTeam: {
       id: row.homeTeamId,
       name: row.homeTeamName,
@@ -545,36 +547,6 @@ export async function listMatchOfficials(auth: AuthContext | null, matchId: stri
   return rows;
 }
 
-async function loadOfficialEligibility(
-  tx: Transaction,
-  userId: string,
-  competitionId: string,
-) {
-  const [user] = await tx
-    .select({ id: users.id, isActive: users.isActive, displayName: users.displayName })
-    .from(users)
-    .where(eq(users.id, userId));
-  if (!user) throw badRequest('The official account does not exist.');
-  if (!user.isActive) throw conflict('The official account is inactive.');
-
-  const [assignment] = await tx
-    .select({ role: roles.name })
-    .from(userRoles)
-    .innerJoin(roles, eq(userRoles.roleId, roles.id))
-    .where(
-      and(
-        eq(userRoles.userId, userId),
-        eq(roles.name, 'match_official'),
-        or(isNull(userRoles.competitionId), eq(userRoles.competitionId, competitionId)),
-      ),
-    )
-    .limit(1);
-  if (!assignment) {
-    throw badRequest('The account does not hold an eligible match_official role for this competition.');
-  }
-  return user;
-}
-
 export async function assignMatchOfficial(
   auth: AuthContext,
   matchId: string,
@@ -597,53 +569,29 @@ export async function assignMatchOfficial(
     throw conflict(`Officials cannot be assigned to a "${context.match.status}" match.`);
   }
 
+  const role = input.role ?? 'official';
   const result = await db.transaction(async (tx) => {
     await lockMatch(tx, context.scope.fixtureId, matchId);
-    const user = await loadOfficialEligibility(tx, input.userId, context.scope.competitionId);
-    const [existing] = await tx
-      .select({ userId: matchOfficials.userId, role: matchOfficials.role })
-      .from(matchOfficials)
-      .where(
-        and(
-          eq(matchOfficials.matchId, matchId),
-          eq(matchOfficials.userId, input.userId),
-        ),
-      );
-    if (existing) {
-      throw conflict('The official is already assigned to this match.');
-    }
-    const [assignment] = await tx
-      .insert(matchOfficials)
-      .values({
-        matchId,
-        userId: input.userId,
-        role: input.role ?? 'official',
-        assignedBy: auth.userId,
-      })
-      .returning();
-    if (!assignment) throw conflict('The official is already assigned to this match.');
-
-    await tx.insert(auditLogs).values({
-      actorUserId: auth.userId,
+    const assignment = await insertPersonnelAssignment(tx, {
+      matchId,
+      userId: input.userId,
+      role,
       competitionId: context.scope.competitionId,
       seasonId: context.scope.seasonId,
-      action: 'match.official.assigned',
-      entityType: 'match',
-      entityId: matchId,
-      before: null,
-      after: { ...assignment, displayName: user.displayName },
-      reason: null,
+      actor: auth,
     });
-    await createNotification(tx, user.id, {
+    await createNotification(tx, input.userId, {
       type: 'match.official.assigned',
-      title: 'Match official assignment',
-      body: 'You were assigned as a match official.',
+      title: 'Match personnel assignment',
+      body: role === 'commentary'
+        ? 'You were assigned as a commentary operator.'
+        : 'You were assigned as a match official.',
       entityType: 'match',
       entityId: matchId,
       competitionId: context.scope.competitionId,
-      dedupeKey: `match-official:${matchId}:${user.id}`,
+      dedupeKey: `match-official:${matchId}:${input.userId}`,
     });
-    return { ...assignment, displayName: user.displayName };
+    return assignment;
   });
 
   return result;
@@ -681,6 +629,12 @@ export async function updateMatchOfficial(
     if (!existing) throw notFound('Official assignment not found.');
     const role = input.role ?? existing.role;
     if (role === existing.role) return existing;
+    await assertPersonnelEligible(
+      tx,
+      userId,
+      context.scope.competitionId,
+      role === 'commentary' ? 'commentary' : 'official',
+    );
 
     const [updated] = await tx
       .update(matchOfficials)
@@ -700,6 +654,85 @@ export async function updateMatchOfficial(
       reason: null,
     });
     return updated;
+  });
+}
+
+export async function replaceMatchPersonnel(
+  auth: AuthContext,
+  matchId: string,
+  role: 'official' | 'commentary',
+  userId: string,
+) {
+  const context = await loadMatchContext(matchId);
+  if (!context) throw notFound('Match not found.');
+  if (!canManageOfficials(auth, context.scope)) {
+    if (!(await canReadMatch(auth, context.scope))) throw notFound('Match not found.');
+    throw forbidden('Managing match personnel requires administrative scope.');
+  }
+  if (userId === auth.userId) throw forbidden('You cannot assign yourself to a match.');
+  if (
+    context.match.status === 'full_time' ||
+    context.match.status === 'cancelled' ||
+    context.match.status === 'abandoned'
+  ) {
+    throw conflict(`Personnel cannot be changed on a "${context.match.status}" match.`);
+  }
+
+  return db.transaction(async (tx) => {
+    await lockMatch(tx, context.scope.fixtureId, matchId);
+    const [current] = await tx
+      .select()
+      .from(matchOfficials)
+      .where(
+        and(
+          eq(matchOfficials.matchId, matchId),
+          eq(matchOfficials.role, role),
+        ),
+      )
+      .for('update');
+    if (current?.userId === userId) return { ...current, unchanged: true };
+
+    const user = await assertPersonnelEligible(tx, userId, context.scope.competitionId, role);
+    if (current) {
+      await tx
+        .delete(matchOfficials)
+        .where(
+          and(
+            eq(matchOfficials.matchId, matchId),
+            eq(matchOfficials.userId, current.userId),
+            eq(matchOfficials.role, role),
+          ),
+        );
+    }
+    const [assignment] = await tx
+      .insert(matchOfficials)
+      .values({ matchId, userId, role, assignedBy: auth.userId })
+      .returning();
+    if (!assignment) throw new Error('Personnel insert did not return a row.');
+
+    await tx.insert(auditLogs).values({
+      actorUserId: auth.userId,
+      competitionId: context.scope.competitionId,
+      seasonId: context.scope.seasonId,
+      action: role === 'commentary' ? 'match.commentary.replaced' : 'match.official.replaced',
+      entityType: 'match',
+      entityId: matchId,
+      before: current ?? null,
+      after: { ...assignment, displayName: user.displayName },
+      reason: null,
+    });
+    await createNotification(tx, userId, {
+      type: 'match.official.assigned',
+      title: 'Match personnel assignment',
+      body: role === 'commentary'
+        ? 'You were assigned as a commentary operator.'
+        : 'You were assigned as a match official.',
+      entityType: 'match',
+      entityId: matchId,
+      competitionId: context.scope.competitionId,
+      dedupeKey: `match-personnel:${matchId}:${userId}:${role}`,
+    });
+    return { ...assignment, displayName: user.displayName };
   });
 }
 

@@ -458,15 +458,22 @@ export interface RoleAssignmentRequest {
 }
 
 const SELF_SERVICE_ROLES: readonly string[] = [ROLES.registeredUser, ROLES.visitor];
-const COMPETITION_ADMIN_ONLY_ROLES: readonly string[] = [ROLES.competitionAdmin, ROLES.superAdmin];
+
+/** Explicit allowlist: every other role is denied to competition administrators. */
+const COMPETITION_ADMIN_GRANTABLE_ROLES: readonly string[] = [
+  ROLES.teamCaptain,
+  ROLES.matchOfficial,
+  ROLES.commentaryOperator,
+];
 
 /**
  * Central privilege-escalation guard for role-management routes.
  *
  * - A global super administrator may grant any non-system role globally or in
  *   a competition scope.
- * - A competition administrator may grant only team_captain or match_official
- *   inside a competition they administer and for which they hold roles.manage.
+ * - A competition administrator may grant only the explicitly listed
+ *   operational roles inside a competition they administer and for which they
+ *   hold roles.manage. Administrator roles are never grantable by them.
  * - Nobody may assign roles to themselves, and system roles cannot be granted.
  */
 export async function assertRoleAssignmentAllowed(
@@ -489,8 +496,8 @@ export async function assertRoleAssignmentAllowed(
   ) {
     throw forbidden('You cannot assign roles outside a competition you administer.');
   }
-  if (COMPETITION_ADMIN_ONLY_ROLES.includes(request.role)) {
-    throw forbidden('Competition administrators cannot grant administrator roles.');
+  if (!COMPETITION_ADMIN_GRANTABLE_ROLES.includes(request.role)) {
+    throw forbidden('Competition administrators can only grant operational roles in their competition.');
   }
   const competition = await getCompetitionVisibility(request.competitionId);
   if (!competition) throw forbidden();

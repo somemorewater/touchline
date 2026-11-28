@@ -6,6 +6,7 @@ import type {
   AnnouncementDto,
   AuditLogDto,
   CaptainTeamDto,
+  CommentaryEntryDto,
   CompetitionDto,
   CurrentUser,
   DisciplinaryCaseDto,
@@ -21,6 +22,7 @@ import type {
   LineupDto,
   MatchDetailDto,
   MatchEventDto,
+  MatchOverviewDto,
   MatchOfficialDto,
   MatchResultDto,
   MatchStatisticsDto,
@@ -304,8 +306,17 @@ export const fixturesApi = {
     round?: number | null;
     scheduledAt?: string | null;
     venue?: string | null;
+    officialUserId?: string | null;
+    commentaryUserId?: string | null;
   }) {
-    return request<FixtureDto>('/fixtures', { method: 'POST', body: input });
+    return request<{
+      competitionId: string;
+      seasonId: string;
+      fixture: FixtureDto;
+      match: { id: string };
+      official: MatchOfficialDto | null;
+      commentary: MatchOfficialDto | null;
+    }>('/fixtures', { method: 'POST', body: input });
   },
   update(
     id: string,
@@ -393,8 +404,13 @@ export const matchesApi = {
   officials(id: string) {
     return request<MatchOfficialDto[]>(`/matches/${id}/officials`, {});
   },
-  assignOfficial(id: string, userId: string) {
-    return request<MatchOfficialDto>(`/matches/${id}/officials`, { method: 'POST', body: { userId } });
+  assignOfficial(id: string, userId: string, role: 'official' | 'commentary' = 'official') {
+    return request<MatchOfficialDto>(`/matches/${id}/officials`, { method: 'POST', body: { userId, role } });
+  },
+  replaceOfficial(id: string, role: 'official' | 'commentary', userId: string) {
+    return request<MatchOfficialDto>(`/matches/${id}/personnel/${role}`, {
+      method: 'PUT', body: { userId },
+    });
   },
   removeOfficial(id: string, userId: string) {
     return request<{ removed: boolean; userId: string }>(`/matches/${id}/officials/${userId}`, { method: 'DELETE' });
@@ -913,6 +929,79 @@ export const adminApi = {
   overview(competitionId: string, seasonId?: string) {
     return request<AdministrationOverviewDto>(`/competitions/${competitionId}/administration`, {
       query: { seasonId },
+    });
+  },
+};
+
+/* ------------------------- competition accounts ------------------------- */
+
+export const competitionAccountsApi = {
+  create(input: {
+    email: string;
+    password: string;
+    displayName: string;
+    role: 'match_official' | 'commentary_operator';
+    competitionId: string;
+  }) {
+    return request<{
+      id: string;
+      email: string;
+      displayName: string;
+      role: string;
+      competitionId: string;
+    }>('/competition-accounts', { method: 'POST', body: input });
+  },
+};
+
+/* ------------------------------ commentary ----------------------------- */
+
+export interface CommentaryCreateInput {
+  kind: 'commentary' | 'key_moment';
+  eventType?: string | null;
+  body: string;
+  minute?: number | null;
+  addedMinutes?: number | null;
+  teamRegistrationId?: string | null;
+  isImportant?: boolean;
+  status?: 'draft' | 'published';
+}
+
+export const commentaryApi = {
+  list(matchId: string) {
+    return request<CommentaryEntryDto[]>(`/matches/${matchId}/commentary`);
+  },
+  create(matchId: string, input: CommentaryCreateInput) {
+    return request<CommentaryEntryDto>(`/matches/${matchId}/commentary`, {
+      method: 'POST',
+      body: input,
+    });
+  },
+  update(matchId: string, entryId: string, input: Partial<CommentaryCreateInput>) {
+    return request<CommentaryEntryDto>(`/matches/${matchId}/commentary/${entryId}`, {
+      method: 'PATCH',
+      body: input,
+    });
+  },
+  retract(matchId: string, entryId: string) {
+    return request<CommentaryEntryDto>(`/matches/${matchId}/commentary/${entryId}/retract`, {
+      method: 'POST',
+    });
+  },
+  overview(matchId: string) {
+    return request<MatchOverviewDto | null>(`/matches/${matchId}/overview`);
+  },
+  saveOverview(
+    matchId: string,
+    input: {
+      introduction: string | null;
+      preMatchNotes: string | null;
+      liveSummary: string | null;
+      narrative: string | null;
+    },
+  ) {
+    return request<MatchOverviewDto>(`/matches/${matchId}/overview`, {
+      method: 'PUT',
+      body: input,
     });
   },
 };

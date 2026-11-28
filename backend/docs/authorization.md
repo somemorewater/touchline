@@ -6,26 +6,29 @@ Authorization is centralized in `src/security/`. Routes must use the shared hook
 
 Roles and permissions are seeded repeatably from `src/security/permissions.ts` with `pnpm db:seed`. Dot-notation keys are the canonical vocabulary.
 
-| Permission | visitor | registered_user | team_captain | match_official | competition_admin | super_admin |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
+`commentary_operator` (the match operator) is a separate competition-scoped role with full live match control for assigned matches plus editorial commentary and overview permissions.
+
+| Permission | visitor | registered_user | team_captain | match_official | commentary_operator | competition_admin | super_admin |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `users.manage` | | | | | | ✓ |
-| `users.read`, `roles.manage` | | | | | ✓ scoped | ✓ |
-| `competitions.read` | | | | | ✓ scoped | ✓ |
-| `competitions.create` | | | | | | ✓ |
-| `competitions.update`, `competitions.publish` | | | | | ✓ scoped | ✓ |
-| `teams.read`, `players.read`, `fixtures.read`, `matches.read`, `lineups.read`, `standings.read` | | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `teams.manage`, `players.manage` | | | ✓ own team | | ✓ scoped | ✓ |
-| `captains.manage` | | | | | ✓ scoped | ✓ |
-| `registrations.review` | | | | | ✓ scoped | ✓ |
-| `fixtures.manage`, `matches.manage` | | | | | ✓ scoped | ✓ |
-| `matches.report` | | | | ✓ assigned match | | ✓ |
-| `lineups.manage` | | | ✓ own team | ✓ assigned match | ✓ scoped | ✓ |
-| `standings.manage` | | | | | ✓ scoped | ✓ |
-| `officials.assign`, `disciplinary.manage`, `disputes.manage`, `audit.read` | | | | | ✓ scoped | ✓ |
-| `disputes.submit` | | | ✓ own team | | ✓ scoped | ✓ |
-| `announcements.manage` | | | | | ✓ scoped | ✓ |
-| `files.read` | | | ✓ owned disputes | ✓ assigned disputes | ✓ scoped | ✓ |
-| `files.manage` | | | | | ✓ scoped | ✓ |
+| `users.read`, `roles.manage` |  |  |  |  |  | ✓ scoped | ✓ |
+| `competitions.read` |  |  |  |  |  | ✓ scoped | ✓ |
+| `competitions.create` |  |  |  |  |  |  | ✓ |
+| `competitions.update`, `competitions.publish` |  |  |  |  |  | ✓ scoped | ✓ |
+| `teams.read`, `players.read`, `fixtures.read`, `matches.read`, `lineups.read`, `standings.read` |  | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `teams.manage`, `players.manage` |  |  | ✓ own team |  |  | ✓ scoped | ✓ |
+| `captains.manage` |  |  |  |  |  | ✓ scoped | ✓ |
+| `registrations.review` |  |  |  |  |  | ✓ scoped | ✓ |
+| `fixtures.manage`, `matches.manage` |  |  |  |  |  | ✓ scoped | ✓ |
+| `matches.report` | | | | ✓ assigned match | ✓ assigned match | | ✓ |
+| `lineups.manage` | | | ✓ own team | ✓ assigned match | ✓ assigned match | ✓ scoped | ✓ |
+| `commentary.manage` | | | | | ✓ assigned match | ✓ scoped | ✓ |
+| `standings.manage` |  |  |  |  |  | ✓ scoped | ✓ |
+| `officials.assign`, `disciplinary.manage`, `disputes.manage`, `audit.read` |  |  |  |  |  | ✓ scoped | ✓ |
+| `disputes.submit` |  |  | ✓ own team |  |  | ✓ scoped | ✓ |
+| `announcements.manage` |  |  |  |  |  | ✓ scoped | ✓ |
+| `files.read` |  |  | ✓ owned disputes | ✓ assigned disputes |  | ✓ scoped | ✓ |
+| `files.manage` |  |  |  |  |  | ✓ scoped | ✓ |
 
 `super_admin` is a true superset: a global `super_admin` passes every permission check, even if a permission row is missing from the seed. `visitor` is reserved for anonymous access and has no account grant.
 
@@ -130,7 +133,8 @@ WebSocket authorization failures use typed error frames and close codes: `4401` 
 - Registration body is strict and can only receive `registered_user`.
 - Role and permission data is always loaded server-side.
 - Users cannot assign roles to themselves (`assertRoleAssignmentAllowed`).
-- Only a global `super_admin` can create administrator accounts, grant `super_admin` or grant `competition_admin`. Competition administrators may grant/revoke only `team_captain` and `match_official` in their permitted competition.
+- Only a global `super_admin` can create administrator accounts, grant `super_admin` or grant `competition_admin`. Competition administrators may grant/revoke only `team_captain`, `match_official` and `commentary_operator` in their permitted competition. This is an explicit allowlist, so new roles are not grantable until added deliberately.
+- Competition administrators can provision new `match_official` or `commentary_operator` accounts through `POST /api/v1/competition-accounts`; the new account receives only a scoped operational role and no global grant.
 - Account status changes and session revocation require global `users.manage`; scoped `users.read` never implies `users.manage`.
 - The last global super administrator cannot be deactivated, suspended or demoted.
 - Reviewers assigned to disciplinary cases or disputes must be active administrators in that competition; assignment does not grant case-management authority beyond the assigned record.
@@ -139,7 +143,8 @@ WebSocket authorization failures use typed error frames and close codes: `4401` 
 - A captain cannot submit, withdraw, review, approve or reject another team's registration. Administrative review also rejects the case where the reviewing administrator is the team's own captain.
 - Captains cannot create/update team entities, seasons, groups or competitions.
 - Officials report only for explicitly assigned matches. There is no self-assignment: an administrator cannot grant themselves official authority, and `matches.report` alone is never sufficient.
-- Officials must hold an active `match_official` role that is global or scoped to the match's competition.
+- Officials must hold an active `match_official` role that is global or scoped to the match's competition. Match operators must hold `commentary_operator` in that competition plus a `matchOfficials` row with role `commentary`; assignment never grants administration or global permissions.
+- `commentary.manage` alone does not grant match access; it must be combined with an explicit match assignment (or scoped management authority). Commentary entries are editorial records and never change official events or scores.
 - Only `matches.manage` can correct a confirmed result or edit/void an event after confirmation; an assigned official cannot.
 - Captains can read their team's fixtures, matches and events but never report, confirm or correct a result.
 - Captains can create/edit/submit/withdraw only their own team's lineup before kickoff. They cannot confirm or return any lineup, including their own, and cannot edit a submitted or confirmed lineup.
